@@ -53,6 +53,7 @@ void URTSGameSimSubsystem::Deinitialize()
 	CommandInputsByFrame.Empty();
 	UnitsByID.Empty();
 	bSimIsRunning = false;
+	Super::Deinitialize();
 }
 
 TStatId URTSGameSimSubsystem::GetStatId() const
