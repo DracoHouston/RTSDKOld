@@ -43,6 +43,8 @@ void URTSMovementTrait::BuildTemplate(FMassEntityTemplateBuildContext& BuildCont
 	BuildContext.AddFragment<FRTSMovementFragment>();
 	BuildContext.AddFragment<FRTSMovementInputFragment>();
 	BuildContext.AddFragment<FRTSMovementCoreParamsFragment>();
+	BuildContext.AddFragment<FRTSMovementComplexParamsFragment>();
+	BuildContext.AddFragment<FRTSPhysicsParamsFragment>();
 	BuildContext.AddFragment<FRTSSimRootFragment>();
 	BuildContext.AddFragment<FRTSCollisionBoundsFragment>();
 	BuildContext.GetMutableObjectFragmentInitializers().Add([=](UObject& Owner, FMassEntityView& EntityView, const EMassTranslationDirection CurrentDirection)
@@ -52,12 +54,16 @@ void URTSMovementTrait::BuildTemplate(FMassEntityTemplateBuildContext& BuildCont
 		FRTSVector64 max = FRTSVector64::ZeroVector;
 		FRTSVector64 size = FRTSVector64::ZeroVector;
 		FRTSVector64 feet = FRTSVector64::ZeroVector;
-		if (FRTSTraitHelpers::GetBounds(actorowner, min, max, size, feet))
+		FRTSNumber64 radius = 0.0;
+		FRTSNumber64 halfheight = 0.0;
+		if (FRTSTraitHelpers::GetBounds(actorowner, min, max, size, halfheight, radius, feet))
 		{
 			FRTSCollisionBoundsFragment& bounds = EntityView.GetFragmentData<FRTSCollisionBoundsFragment>();
 			bounds.BoundsMax = max;
 			bounds.BoundsMin = min;
 			bounds.BoundsSize = size;
+			bounds.BoundsHalfHeight = halfheight;
+			bounds.BoundsRadius = radius;
 			bounds.FeetLocation = feet;
 			FRTSSimRootFragment& simroot = EntityView.GetFragmentData<FRTSSimRootFragment>();
 			simroot.SimRoot = actorowner->GetRootComponent();
@@ -65,16 +71,29 @@ void URTSMovementTrait::BuildTemplate(FMassEntityTemplateBuildContext& BuildCont
 			input.Input = (FRTSQuat64)(simroot.SimRoot->GetComponentTransform().GetRotation()) * FRTSVector64::ForwardVector;
 
 			FRTSMovementCoreParamsFragment& movecoreparams = EntityView.GetFragmentData<FRTSMovementCoreParamsFragment>();
+			FRTSPhysicsParamsFragment& physicsparams = EntityView.GetFragmentData<FRTSPhysicsParamsFragment>();
+			FRTSMovementComplexParamsFragment& movecomplexparams = EntityView.GetFragmentData<FRTSMovementComplexParamsFragment>();
 #if RTSDK_USE_FIXED_POINT == 0
 			movecoreparams.MaxSpeed = (double)MaxSpeed;
 			movecoreparams.Acceleration = (double)Acceleration;
 			movecoreparams.BrakingFriction = (double)BrakingFriction;
 			movecoreparams.AirControl = (double)AirControl;
+
+			physicsparams.Mass = (double)Mass;
+			physicsparams.Volume = (double)Volume;
+			physicsparams.Density = FRTSMath::IsNearlyZero(physicsparams.Mass) || FRTSMath::IsNearlyZero(physicsparams.Volume) ? 0.0 : physicsparams.Mass / physicsparams.Volume;
+
+			movecomplexparams.MaxWalkableAngle = FRTSMath::DegreesToRadians((FRTSNumber64)((double)MaxWalkableAngle));
+			movecomplexparams.StepUpHeight = (double)MaxStepUpHeight;
+			movecomplexparams.StepDownHeight = (double)MaxStepDownHeight;
 #else
 			movecoreparams.MaxSpeed = MaxSpeed;
 			movecoreparams.Acceleration = Acceleration;
 			movecoreparams.BrakingFriction = BrakingFriction;
 			movecoreparams.AirControl = AirControl;
+			physicsparams.Mass = Mass;
+			physicsparams.Volume = Volume;
+			physicsparams.Density = FRTSMath::IsNearlyZero(physicsparams.Mass) || FRTSMath::IsNearlyZero(physicsparams.Volume) ? FRTSNumber64::Make(0) : physicsparams.Mass / physicsparams.Volume;
 #endif
 			
 			FRTSMovementFragment& MovementFragment = EntityView.GetFragmentData<FRTSMovementFragment>();
@@ -82,6 +101,8 @@ void URTSMovementTrait::BuildTemplate(FMassEntityTemplateBuildContext& BuildCont
 			MovementFragment.CurrentTransform = roottransform;
 			MovementFragment.PreviousTransform = roottransform;
 			MovementFragment.Velocity = FRTSVector64::ZeroVector;
+
+			
 		}
 	});
 }
@@ -103,28 +124,6 @@ void URTSVisRootInterpolationTrait::BuildTemplate(FMassEntityTemplateBuildContex
 				}
 			}
 		});
-}
-
-void URTSUnitRegistrationTrait::BuildTemplate(FMassEntityTemplateBuildContext& BuildContext, const UWorld& World) const
-{
-	BuildContext.AddFragment<FRTSUnitIDFragment>();
-	BuildContext.GetMutableObjectFragmentInitializers().Add([=](UObject& Owner, FMassEntityView& EntityView, const EMassTranslationDirection CurrentDirection)
-	{
-		AActor* actorowner = Cast<AActor>(&Owner);
-		if (actorowner != nullptr)
-		{
-			UWorld* world = actorowner->GetWorld();
-			if (world != nullptr)
-			{
-				URTSGameSimSubsystem* sim = world->GetSubsystem<URTSGameSimSubsystem>();
-				if (sim != nullptr)
-				{
-					FRTSUnitIDFragment& unitid = EntityView.GetFragmentData<FRTSUnitIDFragment>();
-					unitid.UnitID = sim->RegisterUnit(actorowner, EntityView.GetEntity());
-				}
-			}
-		}
-	});
 }
 
 AActor* FRTSTraitHelpers::GetOwnerAsActor(UObject* inOwner)
@@ -155,7 +154,7 @@ void GetChildBounds(USceneComponent* inChild, FRTSVector64& outMin, FRTSVector64
 	}
 }
 
-bool FRTSTraitHelpers::GetBounds(AActor* inActor, FRTSVector64& outMin, FRTSVector64& outMax, FRTSVector64& outSize, FRTSVector64& outFeetPosition)
+bool FRTSTraitHelpers::GetBounds(AActor* inActor, FRTSVector64& outMin, FRTSVector64& outMax, FRTSVector64& outSize, FRTSNumber64& outHalfHeight, FRTSNumber64& outRadius, FRTSVector64& outFeetPosition )
 {
 	if (inActor == nullptr)
 	{
@@ -182,5 +181,7 @@ bool FRTSTraitHelpers::GetBounds(AActor* inActor, FRTSVector64& outMin, FRTSVect
 	outSize = outMax - outMin;
 	outFeetPosition = FRTSVector64::ZeroVector;
 	outFeetPosition.Z = outMin.Z;
+	outHalfHeight = FRTSMath::Abs(outMin.Z);
+	outRadius = FRTSMath::Abs(FRTSMath::Max(outMax.X, outMax.Y));
 	return true;
 }

@@ -8,12 +8,13 @@
 #include "RTSDKFragments.generated.h"
 
 class URTSVisRootComponent;
+class URTSDKUnitComponent;
 class UPrimitiveComponent;
 
 /**
 *
 */
-USTRUCT(BlueprintType)
+USTRUCT()
 struct FRTSUnitIDFragment : public FMassFragment
 {
 	GENERATED_BODY()
@@ -24,25 +25,17 @@ struct FRTSUnitIDFragment : public FMassFragment
 /**
 * 
 */
-USTRUCT(BlueprintType)
+USTRUCT()
 struct FRTSMovementFragment : public FMassFragment
 {
 	GENERATED_BODY()
 
-	//UPROPERTY(BlueprintReadWrite, EditAnywhere)
 	FRTSVector64 Velocity;
-	//FFixedVector64 Velocity;
-
-	//UPROPERTY(BlueprintReadWrite, EditAnywhere)
 	FRTSTransform64 PreviousTransform;
-	//FFixedTransform64 PreviousTransform;
-
-	//UPROPERTY(BlueprintReadWrite, EditAnywhere)
 	FRTSTransform64 CurrentTransform;
-	//FFixedTransform64 CurrentTransform;
 };
 
-USTRUCT(BlueprintType)
+USTRUCT()
 struct FRTSMovementInputFragment : public FMassFragment
 {
 	GENERATED_BODY()
@@ -50,7 +43,7 @@ struct FRTSMovementInputFragment : public FMassFragment
 	FRTSVector64 Input;
 };
 
-USTRUCT(BlueprintType)
+USTRUCT()
 struct FRTSMovementCoreParamsFragment : public FMassFragment
 {
 	GENERATED_BODY()
@@ -61,7 +54,27 @@ struct FRTSMovementCoreParamsFragment : public FMassFragment
 	FRTSNumber64 AirControl;
 };
 
-USTRUCT(BlueprintType)
+USTRUCT()
+struct FRTSMovementComplexParamsFragment : public FMassFragment
+{
+	GENERATED_BODY()
+
+	FRTSNumber64 StepUpHeight;
+	FRTSNumber64 StepDownHeight;
+	FRTSNumber64 MaxWalkableAngle;
+};
+
+USTRUCT()
+struct FRTSPhysicsParamsFragment : public FMassFragment
+{
+	GENERATED_BODY()
+	
+	FRTSNumber64 Mass;
+	FRTSNumber64 Volume;
+	FRTSNumber64 Density;
+};
+
+USTRUCT()
 struct FRTSCollisionBoundsFragment : public FMassFragment
 {
 	GENERATED_BODY()
@@ -69,10 +82,12 @@ struct FRTSCollisionBoundsFragment : public FMassFragment
 	FRTSVector64 BoundsSize;
 	FRTSVector64 BoundsMin;
 	FRTSVector64 BoundsMax;
+	FRTSNumber64 BoundsHalfHeight;
+	FRTSNumber64 BoundsRadius;
 	FRTSVector64 FeetLocation;
 };
 
-USTRUCT(BlueprintType)
+USTRUCT()
 struct FRTSMovementBasisFragment : public FMassFragment
 {
 	GENERATED_BODY()
@@ -82,7 +97,7 @@ struct FRTSMovementBasisFragment : public FMassFragment
 	FHitResult Impact;
 };
 
-USTRUCT(BlueprintType)
+USTRUCT()
 struct FRTSVisRootFragment : public FMassFragment
 {
 	GENERATED_BODY()
@@ -90,10 +105,18 @@ struct FRTSVisRootFragment : public FMassFragment
 	TWeakObjectPtr<URTSVisRootComponent> VisRoot;
 };
 
-USTRUCT(BlueprintType)
+USTRUCT()
 struct FRTSSimRootFragment : public FMassFragment
 {
 	GENERATED_BODY()
 
 	TWeakObjectPtr<USceneComponent> SimRoot;
+};
+
+USTRUCT()
+struct FRTSUnitComponentFragment : public FMassFragment
+{
+	GENERATED_BODY()
+
+	TWeakObjectPtr<URTSDKUnitComponent> UnitComponent;
 };

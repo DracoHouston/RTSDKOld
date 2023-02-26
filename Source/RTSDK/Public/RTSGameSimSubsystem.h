@@ -6,7 +6,12 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "RTSConstants.h"
 #include "MassCommonTypes.h"
+#include "RTSDKScriptExecutionContext.h"
 #include "RTSGameSimSubsystem.generated.h"
+
+class URTSDKUnitComponent;
+
+
 
 USTRUCT(BlueprintType)
 struct RTSDK_API FRTSCommandInputInfo
@@ -17,13 +22,14 @@ public:
 };
 
 USTRUCT(BlueprintType)
-struct RTSDK_API FRTSUnitActorAndMassID
+struct RTSDK_API FRTSSimRegisteredUnitInfo
 {
 public:
 	GENERATED_BODY()
 
 	FMassEntityHandle UnitHandle;
 	TWeakObjectPtr<AActor> UnitActor;
+	TWeakObjectPtr<URTSDKUnitComponent> UnitComponent;
 };
 
 /**
@@ -168,23 +174,41 @@ public:
 		AddCommandInputByFrame(inCommandInput, FrameCount + FrameDelay);
 	}
 	
-	int64 RegisterUnit(AActor* inUnitActor, FMassEntityHandle inUnitHandle)
+	int64 RegisterUnit(AActor* inUnitActor, URTSDKUnitComponent* inUnitComponent, FMassEntityHandle inUnitHandle);
+
+	bool DoesUnitExist(int64 TargetID) const
 	{
-		if ((inUnitActor == nullptr) || (!inUnitHandle.IsValid()))
-		{
-			return -1;
-		}
-		
-		int64 newid = ClaimUnitID();
-		FRTSUnitActorAndMassID& newunit = UnitsByID.Add(newid);
-		newunit.UnitActor = inUnitActor;
-		newunit.UnitHandle = inUnitHandle;
-		return newid;
+		return UnitsByID.Contains(TargetID);
+	}
+
+	const FRTSSimRegisteredUnitInfo& GetUnitInfoByIDChecked(int64 TargetID) const
+	{
+		return UnitsByID.FindChecked(TargetID);
+	}
+
+	const FRTSSimRegisteredUnitInfo* GetUnitInfoByID(int64 TargetID) const
+	{
+		return UnitsByID.Find(TargetID);
+	}
+
+	FMassCommandBuffer& StartScriptCallingMode();
+	void EndScriptCallingMode();
+
+	bool IsScriptCallingMode()
+	{
+		return bInScriptCallingMode;
+	}
+
+	UFUNCTION(BlueprintCallable)
+	void SetGlobalGravityDirection(FVector inDir)
+	{
+		inDir.Normalize();
+		SetGravityDirection(inDir);
 	}
 
 protected:
 	bool bSimIsRunning;
-	
+	bool bInScriptCallingMode;
 	int32 FrameCount;
 	int32 TargetUPS;
 	FRTSNumber64 TimeStep;
@@ -197,7 +221,10 @@ protected:
 	int32 FrameDelay;
 	TMap<int32, TArray<FRTSCommandInputInfo>> CommandInputsByFrame;
 	
-	TMap<int64, FRTSUnitActorAndMassID> UnitsByID;
+	TMap<int64, FRTSSimRegisteredUnitInfo> UnitsByID;
+	TSharedPtr<FMassCommandBuffer> ScriptCommandBuffer;
+
+	//TMap<TSubclassOf<FRTSBatchedSimCommand>, TArray<TWeakPtr<FRTSBatchedSimCommand>>> SimCommands;
 	int64 NextUnitID;
 	
 	FRTSNumber64 MetersToUUScale;

@@ -14,7 +14,7 @@ struct RTSDK_API FRTSTraitHelpers
 	static AActor* GetOwnerAsActor(UObject* inOwner);
 	
 
-	static bool GetBounds(AActor* inActor, FRTSVector64& outMin, FRTSVector64& outMax, FRTSVector64& outSize, FRTSVector64& outFeetPosition);
+	static bool GetBounds(AActor* inActor, FRTSVector64& outMin, FRTSVector64& outMax, FRTSVector64& outSize, FRTSNumber64& outHalfHeight, FRTSNumber64& outRadius, FRTSVector64& outFeetPosition);
 };
 
 /**
@@ -42,6 +42,26 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 		FFixed64 AirControl;
 
+	//Mass, in kilograms
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+		FFixed64 Mass;
+
+	//Volume, in meters cubed
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+		FFixed64 Volume;
+
+	//Maximum height unit may step up onto walkable geometry, in meters
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+		FFixed64 MaxStepUpHeight;
+
+	//Maximum height unit may step down onto walkable geometry, in meters
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+		FFixed64 MaxStepDownHeight;
+
+	//Maximum walkable angle unit may walk upon, in degrees
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+		FFixed64 MaxWalkableAngle;
+
 protected:
 	//Where the magic happens
 	virtual void BuildTemplate(
@@ -54,22 +74,6 @@ protected:
 */
 UCLASS()
 class URTSVisRootInterpolationTrait : public UMassEntityTraitBase
-{
-public:
-	GENERATED_BODY()
-
-protected:
-	//Where the magic happens
-	virtual void BuildTemplate(
-		FMassEntityTemplateBuildContext& BuildContext,
-		const UWorld& World) const override;
-};
-
-/**
-*
-*/
-UCLASS()
-class URTSUnitRegistrationTrait : public UMassEntityTraitBase
 {
 public:
 	GENERATED_BODY()

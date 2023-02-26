@@ -8,6 +8,7 @@
 
 void URTSGameSimSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
+	bInScriptCallingMode = false;
 	CommandInputsByFrame.Empty();
 	ResetFrameCount();
 	ResetUnits();
@@ -53,6 +54,7 @@ void URTSGameSimSubsystem::Deinitialize()
 	CommandInputsByFrame.Empty();
 	UnitsByID.Empty();
 	bSimIsRunning = false;
+	bInScriptCallingMode = false;
 	Super::Deinitialize();
 }
 
@@ -63,6 +65,10 @@ TStatId URTSGameSimSubsystem::GetStatId() const
 
 void URTSGameSimSubsystem::Tick(float DeltaTime)
 {
+	if (!bSimIsRunning)
+	{
+		return;
+	}
 	int32 frames = 0;
 	while (ShouldAdvanceFrame() && (frames < 20))
 	{
@@ -78,4 +84,34 @@ void URTSGameSimSubsystem::AdvanceFrame()
 	FMassProcessingContext Context(EntityManager, TimeStep);
 	Context.bFlushCommandBuffer = true;
 	UE::Mass::Executor::Run(proc, Context);
+}
+
+int64 URTSGameSimSubsystem::RegisterUnit(AActor* inUnitActor, URTSDKUnitComponent* inUnitComponent, FMassEntityHandle inUnitHandle)
+{
+	if ((inUnitActor == nullptr) || (!inUnitHandle.IsValid()))
+	{
+		return -1;
+	}
+
+	int64 newid = ClaimUnitID();
+	FRTSSimRegisteredUnitInfo& newunit = UnitsByID.Add(newid);
+	newunit.UnitActor = inUnitActor;
+	newunit.UnitComponent = inUnitComponent;
+	newunit.UnitHandle = inUnitHandle;
+	return newid;
+}
+
+FMassCommandBuffer& URTSGameSimSubsystem::StartScriptCallingMode()
+{
+	ScriptCommandBuffer.Reset();
+	ScriptCommandBuffer = MakeShareable(new FMassCommandBuffer());
+	bInScriptCallingMode = true;
+	return *ScriptCommandBuffer.Get();
+}
+
+void URTSGameSimSubsystem::EndScriptCallingMode()
+{
+	bInScriptCallingMode = false;
+	EntityManager->FlushCommands(ScriptCommandBuffer);
+	ScriptCommandBuffer.Reset();
 }

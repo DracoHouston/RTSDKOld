@@ -66,8 +66,11 @@ void URTSFallingMovementProcessor::Execute(FMassEntityManager& EntityManager, FM
 				FRTSVector64 acceleration = inputs[i].Input * (coreparams[i].Acceleration * coreparams[i].AirControl);
 				FRTSVector64 testvelocity = velocities[i].Velocity + acceleration;
 				velocities[i].Velocity = testvelocity.SizeSquared2D() > FRTSMath::Square(coreparams[i].MaxSpeed) ? velocities[i].Velocity : testvelocity;
+				velocities[i].Velocity.DiagnosticCheckNaN();
 				velocities[i].Velocity += grav;
+				velocities[i].Velocity.DiagnosticCheckNaN();
 				velocities[i].Velocity = velocities[i].Velocity.SizeSquared() > terminalvelocitysquared ? velocities[i].Velocity.GetSafeNormal() * terminalvelocity : velocities[i].Velocity;
+				velocities[i].Velocity.DiagnosticCheckNaN();
 			}
 		}
 	);
