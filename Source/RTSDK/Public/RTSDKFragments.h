@@ -4,10 +4,10 @@
 
 #include "CoreMinimal.h"
 #include "MassEntityTypes.h"
-#include "RTSConstants.h"
+#include "RTSDKConstants.h"
 #include "RTSDKFragments.generated.h"
 
-class URTSVisRootComponent;
+class URTSDKVisRootComponent;
 class URTSDKUnitComponent;
 class UPrimitiveComponent;
 
@@ -22,17 +22,83 @@ struct FRTSUnitIDFragment : public FMassFragment
 	int64 UnitID;
 };
 
-/**
-* 
-*/
 USTRUCT()
-struct FRTSMovementFragment : public FMassFragment
+struct FRTSComplex3DMovementTag : public FMassTag
+{
+	GENERATED_BODY()
+
+};
+
+USTRUCT()
+struct FRTSWalkingMovementTag : public FMassTag
+{
+	GENERATED_BODY()
+
+};
+
+USTRUCT()
+struct FRTSCurrentLocationFragment : public FMassFragment
+{
+	GENERATED_BODY()
+
+	FRTSVector64 Location;
+};
+
+USTRUCT()
+struct FRTSPreviousLocationFragment : public FMassFragment
+{
+	GENERATED_BODY()
+
+	FRTSVector64 Location;
+};
+
+USTRUCT()
+struct FRTSCurrentScaleFragment : public FMassFragment
+{
+	GENERATED_BODY()
+
+	FRTSVector64 Scale;
+};
+
+USTRUCT()
+struct FRTSPreviousScaleFragment : public FMassFragment
+{
+	GENERATED_BODY()
+
+	FRTSVector64 Scale;
+};
+
+USTRUCT()
+struct FRTSCurrentRotationFragment : public FMassFragment
+{
+	GENERATED_BODY()
+
+	FRTSRotator64 Rotation;
+};
+
+USTRUCT()
+struct FRTSPreviousRotationFragment : public FMassFragment
+{
+	GENERATED_BODY()
+
+	FRTSRotator64 Rotation;
+};
+
+USTRUCT()
+struct FRTSVelocityFragment : public FMassFragment
 {
 	GENERATED_BODY()
 
 	FRTSVector64 Velocity;
-	FRTSTransform64 PreviousTransform;
-	FRTSTransform64 CurrentTransform;
+};
+
+USTRUCT()
+struct FRTSAngularVelocityFragment : public FMassFragment
+{
+	GENERATED_BODY()
+
+	FRTSRotator64 AngularVelocity;
+
 };
 
 USTRUCT()
@@ -44,18 +110,78 @@ struct FRTSMovementInputFragment : public FMassFragment
 };
 
 USTRUCT()
-struct FRTSMovementCoreParamsFragment : public FMassFragment
+struct FRTSLookInputFragment : public FMassFragment
 {
 	GENERATED_BODY()
 
-	FRTSNumber64 MaxSpeed;
-	FRTSNumber64 Acceleration;
-	FRTSNumber64 BrakingFriction;
+	FRTSRotator64 Input;
+};
+
+//Factor to scale Max Velocity while in the air. Usually 0.0-1.0 but can go higher for increased speed in the air.
+USTRUCT()
+struct FRTSAirControlFactorFragment : public FMassFragment
+{
+	GENERATED_BODY()
+
 	FRTSNumber64 AirControl;
 };
 
+//Fastest this unit may move under their own power, in UU per frame
 USTRUCT()
-struct FRTSMovementComplexParamsFragment : public FMassFragment
+struct FRTSMaxVelocityFragment : public FMassFragment
+{
+	GENERATED_BODY()
+
+	FRTSNumber64 Velocity;
+};
+
+//Fastest this unit may turn under their own power, in degrees per frame
+USTRUCT()
+struct FRTSMaxAngularVelocityFragment : public FMassFragment
+{
+	GENERATED_BODY()
+
+	FRTSRotator64 AngularVelocity;
+};
+
+//Maximum amount this unit may increase velocity by under their own power, in UU per frame
+USTRUCT()
+struct FRTSMaxAccelerationFragment : public FMassFragment
+{
+	GENERATED_BODY()
+
+	FRTSNumber64 Acceleration;
+};
+
+//Maximum amount this unit may increase angular velocity by under their own power, in degrees per frame
+USTRUCT()
+struct FRTSMaxAngularAccelerationFragment : public FMassFragment
+{
+	GENERATED_BODY()
+
+	FRTSRotator64 AngularAcceleration;
+};
+
+//Maximum amount this unit may decrease velocity by under their own power, in UU per frame
+USTRUCT()
+struct FRTSMaxDecelerationFragment : public FMassFragment
+{
+	GENERATED_BODY()
+
+	FRTSNumber64 Deceleration;
+};
+
+//Maximum amount this unit may decrease angular velocity by under their own power, in degrees per frame
+USTRUCT()
+struct FRTSMaxAngularDecelerationFragment : public FMassFragment
+{
+	GENERATED_BODY()
+
+	FRTSRotator64 AngularDeceleration;
+};
+
+USTRUCT()
+struct FRTSMovementComplexWalkingParamsFragment : public FMassFragment
 {
 	GENERATED_BODY()
 
@@ -102,7 +228,7 @@ struct FRTSVisRootFragment : public FMassFragment
 {
 	GENERATED_BODY()
 
-	TWeakObjectPtr<URTSVisRootComponent> VisRoot;
+	TWeakObjectPtr<URTSDKVisRootComponent> VisRoot;
 };
 
 USTRUCT()

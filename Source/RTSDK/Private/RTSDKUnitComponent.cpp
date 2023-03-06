@@ -4,8 +4,8 @@
 #include "RTSDKUnitComponent.h"
 #include "MassEntityView.h"
 #include "MassEntitySubsystem.h"
-#include "RTSGameSimSubsystem.h"
-#include "RTSBatchedScriptCommand.h"
+#include "RTSDKGameSimSubsystem.h"
+#include "RTSDKBatchedScriptCommand.h"
 #include "RTSDKScriptExecutionContext.h"
 #include "RTSDKFragments.h"
 
@@ -24,7 +24,7 @@ void URTSUnitRegistrationTrait::BuildTemplate(FMassEntityTemplateBuildContext& B
 				UWorld* world = actorowner->GetWorld();
 				if (world != nullptr)
 				{
-					URTSGameSimSubsystem* sim = world->GetSubsystem<URTSGameSimSubsystem>();
+					URTSDKGameSimSubsystem* sim = world->GetSubsystem<URTSDKGameSimSubsystem>();
 					if (sim != nullptr)
 					{
 						FRTSUnitIDFragment& unitid = EntityView.GetFragmentData<FRTSUnitIDFragment>();
@@ -87,7 +87,7 @@ void URTSDKUnitComponent::OnRegister()
 	
 	Super::OnRegister();
 
-	URTSGameSimSubsystem* sim = World->GetSubsystem<URTSGameSimSubsystem>();
+	URTSDKGameSimSubsystem* sim = World->GetSubsystem<URTSDKGameSimSubsystem>();
 	if (sim == nullptr)
 	{
 		return;
@@ -111,6 +111,6 @@ void URTSDKUnitComponent::SetUnitInput(FRTSDKScriptExecutionContext inContext, F
 {
 	if (OwningSim->IsScriptCallingMode())
 	{
-		inContext.ScriptCommandBuffer->PushCommand<FRTSSetUnitInputScriptCommand>(GetEntityHandle(), (FRTSVector64)inDir);
+		inContext.ScriptCommandBuffer->PushCommand<FRTSDKSetUnitInputScriptCommand>(GetEntityHandle(), (FRTSVector64)inDir);
 	}
 }

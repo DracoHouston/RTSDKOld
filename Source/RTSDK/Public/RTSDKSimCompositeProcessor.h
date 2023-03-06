@@ -8,7 +8,7 @@
 
 /**
  * Composite processor that is run in order to run game sim processors on a fixed timestep, with catchup
- * See URTSGameSimSubsystem, which is responsible for running this, and URTSDKMassModuleSettings, which 
+ * See URTSDKGameSimSubsystem, which is responsible for running this, and URTSDKMassModuleSettings, which 
  * auto discovers rts game sim interface using processors.
  */
 UCLASS()

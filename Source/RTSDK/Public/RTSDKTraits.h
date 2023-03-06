@@ -5,62 +5,100 @@
 #include "CoreMinimal.h"
 #include "MassEntityTraitBase.h"
 #include "RTSDKTypes.h"
-#include "RTSConstants.h"
+#include "RTSDKConstants.h"
 #include "FixedPointNumbers.h"
 #include "RTSDKTraits.generated.h"
+
+class URTSDKGameSimSubsystem;
 
 struct RTSDK_API FRTSTraitHelpers
 {
 	static AActor* GetOwnerAsActor(UObject* inOwner);
 	
 
-	static bool GetBounds(AActor* inActor, FRTSVector64& outMin, FRTSVector64& outMax, FRTSVector64& outSize, FRTSNumber64& outHalfHeight, FRTSNumber64& outRadius, FRTSVector64& outFeetPosition);
+	static bool GetBounds(URTSDKGameSimSubsystem* inSim, AActor* inActor, FRTSVector64& outMin, FRTSVector64& outMax, FRTSVector64& outSize, FRTSNumber64& outHalfHeight, FRTSNumber64& outRadius, FRTSVector64& outFeetPosition);
 };
 
 /**
 *
 */
 UCLASS()
-class URTSMovementTrait : public UMassEntityTraitBase
+class URTSComplexWalkingMovementTrait : public UMassEntityTraitBase
 {
 public:
 	GENERATED_BODY()
 
-		//Max speed, in meters per second
-		UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		FFixed64 MaxSpeed;
-
-	//Acceleration, in meters per second squared
+	//Maximum velocity this unit may move under their own power, in meters per second
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		FFixed64 Acceleration;
+	FFixed64 MaxVelocity;
 
-	//Braking Friction, as deceleration in meters per second squared
+	//Maximum acceleration, in meters per second squared
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		FFixed64 BrakingFriction;
+	FFixed64 Acceleration;
 
-	//Air Control, as a scaling factor, typically between 0.0-1.0
+	//Maximum deceleration in meters per second squared
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		FFixed64 AirControl;
+	FFixed64 Deceleration;
+
+	//Air Control, as a scaling factor of Acceleration and Max Velocity while in the air, typically between 0.0-1.0
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FFixed64 AirControl;
 
 	//Mass, in kilograms
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		FFixed64 Mass;
+	FFixed64 Mass;
 
 	//Volume, in meters cubed
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		FFixed64 Volume;
+	FFixed64 Volume;
 
 	//Maximum height unit may step up onto walkable geometry, in meters
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		FFixed64 MaxStepUpHeight;
+	FFixed64 MaxStepUpHeight;
 
 	//Maximum height unit may step down onto walkable geometry, in meters
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		FFixed64 MaxStepDownHeight;
+	FFixed64 MaxStepDownHeight;
 
 	//Maximum walkable angle unit may walk upon, in degrees
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		FFixed64 MaxWalkableAngle;
+	FFixed64 MaxWalkableAngle;
+
+	//Maximum angle unit may turn on the yaw axis, in degrees per second
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FFixed64 MaxAngularVelocityPitch;
+
+	//Maximum angle unit may turn on the pitch axis, in degrees per second
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FFixed64 MaxAngularVelocityYaw;
+
+	//Maximum angle unit may turn on the roll axis, in degrees per second
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FFixed64 MaxAngularVelocityRoll;
+
+	//Maximum angle unit may accelerate angular velocity, on the pitch axis, in degrees per second
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FFixed64 MaxAngularAccelerationPitch;
+
+	//Maximum angle unit may accelerate angular velocity, on the yaw axis, in degrees per second
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FFixed64 MaxAngularAccelerationYaw;
+
+	//Maximum angle unit may accelerate angular velocity, on the roll axis, in degrees per second
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FFixed64 MaxAngularAccelerationRoll;
+
+	//Maximum angle unit may decelerate angular velocity, on the pitch axis, in degrees per second
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FFixed64 MaxAngularDecelerationPitch;
+
+	//Maximum angle unit may decelerate angular velocity, on the yaw axis, in degrees per second
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FFixed64 MaxAngularDecelerationYaw;
+
+	//Maximum angle unit may decelerate angular velocity, on the roll axis, in degrees per second
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FFixed64 MaxAngularDecelerationRoll;
 
 protected:
 	//Where the magic happens

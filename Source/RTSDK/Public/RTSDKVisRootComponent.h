@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/SceneComponent.h"
-#include "RTSVisRootComponent.generated.h"
+#include "RTSDKVisRootComponent.generated.h"
 
 /**
 * A scene component which acts as the root component for RTSDK unit's visualization.
@@ -13,12 +13,12 @@
 * relative to the actual root component, which only moves during sim frames.
 */
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
-class RTSDK_API URTSVisRootComponent : public USceneComponent
+class RTSDK_API URTSDKVisRootComponent : public USceneComponent
 {
 	GENERATED_BODY()
 
 public:	
 	// Sets default values for this component's properties
-	URTSVisRootComponent();
+	URTSDKVisRootComponent();
 	
 };

@@ -2,9 +2,9 @@
 
 
 #include "RTSDKMassModuleSettings.h"
-#include "RTSGameSimProcessorInterface.h"
+#include "RTSDKGameSimProcessorInterface.h"
 #include "RTSDKSimCompositeProcessor.h"
-#include "RTSConstants.h"
+#include "RTSDKConstants.h"
 
 URTSDKMassModuleSettings::URTSDKMassModuleSettings(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -65,11 +65,11 @@ void URTSDKMassModuleSettings::BuildProcessorList()
 		}
 
 		UMassProcessor* ProcessorCDO = GetMutableDefault<UMassProcessor>(SubClassess[i]);
-		if (!SubClassess[i]->ImplementsInterface(URTSGameSimProcessorInterface::StaticClass()))
+		if (!SubClassess[i]->ImplementsInterface(URTSDKGameSimProcessorInterface::StaticClass()))
 		{
 			continue;
 		}
-		IRTSGameSimProcessorInterface* siminterface = Cast<IRTSGameSimProcessorInterface>(ProcessorCDO);
+		IRTSDKGameSimProcessorInterface* siminterface = Cast<IRTSDKGameSimProcessorInterface>(ProcessorCDO);
 		if (siminterface == nullptr)
 		{
 			continue;

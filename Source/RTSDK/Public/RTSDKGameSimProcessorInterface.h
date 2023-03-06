@@ -4,11 +4,11 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Interface.h"
-#include "RTSGameSimProcessorInterface.generated.h"
+#include "RTSDKGameSimProcessorInterface.generated.h"
 
 // This class does not need to be modified.
 UINTERFACE(MinimalAPI)
-class URTSGameSimProcessorInterface : public UInterface
+class URTSDKGameSimProcessorInterface : public UInterface
 {
 	GENERATED_BODY()
 };
@@ -17,7 +17,7 @@ class URTSGameSimProcessorInterface : public UInterface
  * Interface for auto detection of a RTS 'game sim' processor that runs
  * during the rts game sim fixed timestep ticks
  */
-class RTSDK_API IRTSGameSimProcessorInterface
+class RTSDK_API IRTSDKGameSimProcessorInterface
 {
 	GENERATED_BODY()
 

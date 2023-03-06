@@ -4,10 +4,10 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/WorldSubsystem.h"
-#include "RTSConstants.h"
+#include "RTSDKConstants.h"
 #include "MassCommonTypes.h"
 #include "RTSDKScriptExecutionContext.h"
-#include "RTSGameSimSubsystem.generated.h"
+#include "RTSDKGameSimSubsystem.generated.h"
 
 class URTSDKUnitComponent;
 
@@ -22,7 +22,7 @@ public:
 };
 
 USTRUCT(BlueprintType)
-struct RTSDK_API FRTSSimRegisteredUnitInfo
+struct RTSDK_API FRTSDKRegisteredUnitInfo
 {
 public:
 	GENERATED_BODY()
@@ -36,7 +36,7 @@ public:
  * 
  */
 UCLASS()
-class RTSDK_API URTSGameSimSubsystem : public UTickableWorldSubsystem
+class RTSDK_API URTSDKGameSimSubsystem : public UTickableWorldSubsystem
 {
 public:
 	GENERATED_BODY()
@@ -181,12 +181,12 @@ public:
 		return UnitsByID.Contains(TargetID);
 	}
 
-	const FRTSSimRegisteredUnitInfo& GetUnitInfoByIDChecked(int64 TargetID) const
+	const FRTSDKRegisteredUnitInfo& GetUnitInfoByIDChecked(int64 TargetID) const
 	{
 		return UnitsByID.FindChecked(TargetID);
 	}
 
-	const FRTSSimRegisteredUnitInfo* GetUnitInfoByID(int64 TargetID) const
+	const FRTSDKRegisteredUnitInfo* GetUnitInfoByID(int64 TargetID) const
 	{
 		return UnitsByID.Find(TargetID);
 	}
@@ -200,11 +200,8 @@ public:
 	}
 
 	UFUNCTION(BlueprintCallable)
-	void SetGlobalGravityDirection(FVector inDir)
-	{
-		inDir.Normalize();
-		SetGravityDirection(inDir);
-	}
+	void SetGlobalGravityDirection(FVector inDir);
+	
 
 protected:
 	bool bSimIsRunning;
@@ -221,7 +218,7 @@ protected:
 	int32 FrameDelay;
 	TMap<int32, TArray<FRTSCommandInputInfo>> CommandInputsByFrame;
 	
-	TMap<int64, FRTSSimRegisteredUnitInfo> UnitsByID;
+	TMap<int64, FRTSDKRegisteredUnitInfo> UnitsByID;
 	TSharedPtr<FMassCommandBuffer> ScriptCommandBuffer;
 
 	//TMap<TSubclassOf<FRTSBatchedSimCommand>, TArray<TWeakPtr<FRTSBatchedSimCommand>>> SimCommands;
@@ -232,6 +229,17 @@ protected:
 	FRTSNumber64 TerminalVelocity;
 	FRTSVector64 GravityDirection;
 	FRTSVector64 GravityVector;
+
+	TArray<FMassEntityHandle> GetAllUnitEntityHandles()
+	{
+		TArray<FMassEntityHandle> retval;
+		retval.Empty(UnitsByID.Num());
+		for (auto It = UnitsByID.CreateConstIterator(); It; ++It)
+		{
+			retval.Add(It->Value.UnitHandle);
+		}
+		return retval;
+	}
 
 	void ResetUnits()
 	{

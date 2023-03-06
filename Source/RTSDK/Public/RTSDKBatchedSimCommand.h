@@ -4,15 +4,15 @@
 #include "CoreMinimal.h"
 #include "MassCommands.h"
 #include "RTSDKUnitComponent.h"
-#include "RTSGameSimSubsystem.h"
+#include "RTSDKGameSimSubsystem.h"
 #include "RTSDKScriptExecutionContext.h"
 
 template <typename... TArgs>
-struct FRTSBroadcastUnitOnCollidedCommand: public FMassBatchedEntityCommand
+struct FRTSDKBroadcastUnitOnCollidedCommand: public FMassBatchedEntityCommand
 {
 	using Super = FMassBatchedEntityCommand;
 
-	FRTSBroadcastUnitOnCollidedCommand() 
+	FRTSDKBroadcastUnitOnCollidedCommand() 
 	{
 		OperationType = EMassCommandOperationType::None;
 	}
@@ -33,7 +33,7 @@ struct FRTSBroadcastUnitOnCollidedCommand: public FMassBatchedEntityCommand
 		{
 			return;
 		}
-		URTSGameSimSubsystem* sim = TargetUnitComponents[0]->OwningSim;
+		URTSDKGameSimSubsystem* sim = TargetUnitComponents[0]->OwningSim;
 		FMassCommandBuffer& defer = sim->StartScriptCallingMode();
 		FRTSDKScriptExecutionContext context(&defer);
 		for (int32 i = 0; i < TargetUnitComponents.Num(); i++)

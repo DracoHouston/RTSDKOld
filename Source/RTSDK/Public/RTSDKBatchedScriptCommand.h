@@ -2,17 +2,17 @@
 
 #pragma once
 #include "CoreMinimal.h"
-#include "RTSConstants.h"
+#include "RTSDKConstants.h"
 #include "MassCommands.h"
 #include "RTSDKFragments.h"
 
 
 template <typename... TArgs>
-struct FRTSSetUnitInputScriptCommand : public FMassBatchedEntityCommand
+struct FRTSDKSetUnitInputScriptCommand : public FMassBatchedEntityCommand
 {
 	using Super = FMassBatchedEntityCommand;
 
-	FRTSSetUnitInputScriptCommand()
+	FRTSDKSetUnitInputScriptCommand()
 	{
 		OperationType = EMassCommandOperationType::None;
 	}
@@ -30,6 +30,7 @@ struct FRTSSetUnitInputScriptCommand : public FMassBatchedEntityCommand
 		for (int32 i = 0; i < NewDirections.Num(); i++)
 		{
 			System.GetFragmentDataChecked<FRTSMovementInputFragment>(TargetEntities[i]).Input = NewDirections[i];
+			System.GetFragmentDataChecked<FRTSLookInputFragment>(TargetEntities[i]).Input.Yaw = NewDirections[i].ToOrientationRotator().Yaw;
 		}
 	}
 };

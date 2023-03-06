@@ -1,19 +1,20 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "RTSGameSimSubsystem.h"
+#include "RTSDKGameSimSubsystem.h"
 #include "RTSDKMassModuleSettings.h"
 #include "MassExecutor.h"
 #include "MassEntitySubsystem.h"
+#include "MassSignalSubsystem.h"
 
-void URTSGameSimSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+void URTSDKGameSimSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	bInScriptCallingMode = false;
 	CommandInputsByFrame.Empty();
 	ResetFrameCount();
 	ResetUnits();
 	SetFrameDelay(1);
-	SetTimestep(30.0);
+	SetTimestep(32.0);
 	SetMetersToUUScale(100.0);
 	SetGravityDirection(FVector::DownVector);
 	SetGravityAcceleration(9.8);
@@ -21,12 +22,12 @@ void URTSGameSimSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	Super::Initialize(Collection);
 }
 
-void URTSGameSimSubsystem::PostInitialize()
+void URTSDKGameSimSubsystem::PostInitialize()
 {
 	Super::PostInitialize();
 }
 
-void URTSGameSimSubsystem::OnWorldBeginPlay(UWorld& InWorld)
+void URTSDKGameSimSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 {
 	FString DependencyGraphFileName;
 	const URTSDKMassModuleSettings* Settings = GetMutableDefault<URTSDKMassModuleSettings>();
@@ -49,7 +50,7 @@ void URTSGameSimSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	bSimIsRunning = true;
 }
 
-void URTSGameSimSubsystem::Deinitialize()
+void URTSDKGameSimSubsystem::Deinitialize()
 {
 	CommandInputsByFrame.Empty();
 	UnitsByID.Empty();
@@ -58,12 +59,12 @@ void URTSGameSimSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
-TStatId URTSGameSimSubsystem::GetStatId() const
+TStatId URTSDKGameSimSubsystem::GetStatId() const
 {
-	RETURN_QUICK_DECLARE_CYCLE_STAT(URTSGameSimSubsystem, STATGROUP_Tickables);
+	RETURN_QUICK_DECLARE_CYCLE_STAT(URTSDKGameSimSubsystem, STATGROUP_Tickables);
 }
 
-void URTSGameSimSubsystem::Tick(float DeltaTime)
+void URTSDKGameSimSubsystem::Tick(float DeltaTime)
 {
 	if (!bSimIsRunning)
 	{
@@ -77,7 +78,7 @@ void URTSGameSimSubsystem::Tick(float DeltaTime)
 	}
 }
 
-void URTSGameSimSubsystem::AdvanceFrame()
+void URTSDKGameSimSubsystem::AdvanceFrame()
 {
 	FrameCount++;
 	UMassProcessor& proc = *SimProcessor;
@@ -86,7 +87,7 @@ void URTSGameSimSubsystem::AdvanceFrame()
 	UE::Mass::Executor::Run(proc, Context);
 }
 
-int64 URTSGameSimSubsystem::RegisterUnit(AActor* inUnitActor, URTSDKUnitComponent* inUnitComponent, FMassEntityHandle inUnitHandle)
+int64 URTSDKGameSimSubsystem::RegisterUnit(AActor* inUnitActor, URTSDKUnitComponent* inUnitComponent, FMassEntityHandle inUnitHandle)
 {
 	if ((inUnitActor == nullptr) || (!inUnitHandle.IsValid()))
 	{
@@ -94,14 +95,14 @@ int64 URTSGameSimSubsystem::RegisterUnit(AActor* inUnitActor, URTSDKUnitComponen
 	}
 
 	int64 newid = ClaimUnitID();
-	FRTSSimRegisteredUnitInfo& newunit = UnitsByID.Add(newid);
+	FRTSDKRegisteredUnitInfo& newunit = UnitsByID.Add(newid);
 	newunit.UnitActor = inUnitActor;
 	newunit.UnitComponent = inUnitComponent;
 	newunit.UnitHandle = inUnitHandle;
 	return newid;
 }
 
-FMassCommandBuffer& URTSGameSimSubsystem::StartScriptCallingMode()
+FMassCommandBuffer& URTSDKGameSimSubsystem::StartScriptCallingMode()
 {
 	ScriptCommandBuffer.Reset();
 	ScriptCommandBuffer = MakeShareable(new FMassCommandBuffer());
@@ -109,9 +110,19 @@ FMassCommandBuffer& URTSGameSimSubsystem::StartScriptCallingMode()
 	return *ScriptCommandBuffer.Get();
 }
 
-void URTSGameSimSubsystem::EndScriptCallingMode()
+void URTSDKGameSimSubsystem::EndScriptCallingMode()
 {
 	bInScriptCallingMode = false;
+	//TODO: change this to an array of buffers, advance frame flushes them after appending them all together in order, after the processor had finished and flushed the buffer
+	//this is queueing up too many command buffers and it makes mass freak out about its queue being long as fuck
 	EntityManager->FlushCommands(ScriptCommandBuffer);
 	ScriptCommandBuffer.Reset();
+}
+
+void URTSDKGameSimSubsystem::SetGlobalGravityDirection(FVector inDir)
+{
+	UMassSignalSubsystem* SignalSubsystem = UWorld::GetSubsystem<UMassSignalSubsystem>(GetWorld());
+	inDir.Normalize();
+	SetGravityDirection(inDir);
+	SignalSubsystem->SignalEntities(UE::Mass::Signals::RTSDKUnitGravityChanged, GetAllUnitEntityHandles());
 }

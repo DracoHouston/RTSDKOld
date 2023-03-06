@@ -8,7 +8,7 @@
 #include "RTSDKScriptExecutionContext.h"
 #include "RTSDKUnitComponent.generated.h"
 
-class URTSGameSimSubsystem;
+class URTSDKGameSimSubsystem;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FRTSDKOnUnitCollided, FRTSDKScriptExecutionContext, ScriptContext, FHitResult, TriggeringHit);
 
@@ -74,5 +74,5 @@ public:
 	UFUNCTION(BlueprintCallable)
 		void SetUnitInput(FRTSDKScriptExecutionContext inContext, FVector inDir);
 
-	TObjectPtr<URTSGameSimSubsystem> OwningSim;
+	TObjectPtr<URTSDKGameSimSubsystem> OwningSim;
 };
