@@ -6,6 +6,7 @@
 #include "MassSignalProcessorBase.h"
 #include "RTSDKGameSimProcessorBase.h"
 #include "RTSDKGameSimProcessorInterface.h"
+#include "RTSDKFragments.h"
 #include "RTSDKComplexMovementCollisionAndCommit.generated.h"
 
 struct FBasedWalkingMoveCommitInfo
@@ -14,7 +15,6 @@ struct FBasedWalkingMoveCommitInfo
 	
 	FRTSCurrentLocationFragment& Location;
 	FRTSCurrentRotationFragment& Rotation;
-	FRTSCurrentScaleFragment& Scale;
 	FRTSVelocityFragment& Velocity;
 	FRTSMovementBasisFragment& Basis;
 
@@ -31,7 +31,6 @@ struct FBasedWalkingMoveCommitInfo
 		URTSDKUnitComponent* inUnit, 
 		FRTSCurrentLocationFragment& inLocFragment, 
 		FRTSCurrentRotationFragment& inRotFragment, 
-		FRTSCurrentScaleFragment& inScaleFragment, 
 		FRTSVelocityFragment& inVelocityFragment,
 		FRTSMovementBasisFragment& inBasis, 
 		const FRTSCollisionBoundsFragment& inBounds, 
@@ -40,7 +39,6 @@ struct FBasedWalkingMoveCommitInfo
 		FMassEntityHandle inEntity)
 		: Location(inLocFragment), 
 		Rotation(inRotFragment), 
-		Scale(inScaleFragment), 
 		Velocity(inVelocityFragment), 
 		Basis(inBasis), 
 		Bounds(inBounds), 
@@ -64,7 +62,6 @@ struct FAirWalkingMoveCommitInfo
 
 	FRTSCurrentLocationFragment& Location;
 	FRTSCurrentRotationFragment& Rotation;
-	FRTSCurrentScaleFragment& Scale;
 	FRTSVelocityFragment& Velocity;
 
 	const FRTSCollisionBoundsFragment& Bounds;
@@ -80,7 +77,6 @@ struct FAirWalkingMoveCommitInfo
 		URTSDKUnitComponent* inUnit, 
 		FRTSCurrentLocationFragment& inLocFragment, 
 		FRTSCurrentRotationFragment& inRotFragment, 
-		FRTSCurrentScaleFragment& inScaleFragment, 
 		FRTSVelocityFragment& inVelocityFragment, 
 		const FRTSCollisionBoundsFragment& inBounds, 
 		const FRTSMovementComplexWalkingParamsFragment& inMovementComplexParams, 
@@ -88,7 +84,6 @@ struct FAirWalkingMoveCommitInfo
 		FMassEntityHandle inEntity)
 		: Location(inLocFragment), 
 		Rotation(inRotFragment), 
-		Scale(inScaleFragment), 
 		Velocity(inVelocityFragment), 
 		Bounds(inBounds), 
 		WalkingParams(inMovementComplexParams), 
@@ -106,20 +101,58 @@ struct FAirWalkingMoveCommitInfo
 	}
 };
 
+struct FComplexMovementRotationCommitInfo
+{
+	uint32 Key;
+
+	FRTSCurrentLocationFragment& Location;
+	FRTSCurrentRotationFragment& Rotation;
+	FRTSAngularVelocityFragment& Velocity;
+
+	const FRTSCollisionBoundsFragment& Bounds;
+
+	FMassEntityHandle Entity;
+
+	USceneComponent* SimRoot;
+
+	FComplexMovementRotationCommitInfo(
+		USceneComponent* inRoot,
+		FRTSCurrentLocationFragment& inLocFragment,
+		FRTSCurrentRotationFragment& inRotFragment,
+		FRTSAngularVelocityFragment& inAngularVelocityFragment,
+		const FRTSCollisionBoundsFragment& inBounds,
+		int64 UnitID,
+		FMassEntityHandle inEntity)
+		: Location(inLocFragment),
+		Rotation(inRotFragment),
+		Velocity(inAngularVelocityFragment),
+		Bounds(inBounds),
+		Entity(inEntity),
+		SimRoot(inRoot)
+	{
+		//todo: make a 64 bit hash out of this, frame count and some constant
+		Key = UnitID;
+	}
+
+	inline bool operator<(const FComplexMovementRotationCommitInfo& Other) const
+	{
+		return Key < Other.Key;
+	}
+};
+
 /**
 *
 */
 UCLASS()
-class URTSDKComplexMovementCommit : public UMassSignalProcessorBase, public IRTSDKGameSimProcessorInterface
+class URTSDKComplexMovementCommit : public URTSDKGameSimProcessorBase
 {
 	GENERATED_BODY()
 public:
 	URTSDKComplexMovementCommit();
 	
-	virtual void Initialize(UObject& Owner) override;
 protected:
 	virtual void ConfigureQueries() override;
-	virtual void SignalEntities(FMassEntityManager& EntityManager, FMassExecutionContext& Context, FMassSignalNameLookup& EntitySignals) override;
+	//virtual void SignalEntities(FMassEntityManager& EntityManager, FMassExecutionContext& Context, FMassSignalNameLookup& EntitySignals) override;
 
 	void ProcessBasedMovers(FMassEntityManager& EntityManager, FMassExecutionContext& Context);
 
@@ -133,4 +166,23 @@ protected:
 	FMassEntityQuery AirMoversQuery;
 	TArray<FBasedWalkingMoveCommitInfo> BasedMoveCommitsThisFrame;
 	TArray<FAirWalkingMoveCommitInfo> AirMoveCommitsThisFrame;
+};
+
+/**
+*
+*/
+UCLASS()
+class URTSDKComplexRotationCommit : public URTSDKGameSimProcessorBase
+{
+	GENERATED_BODY()
+public:
+	URTSDKComplexRotationCommit();
+
+protected:
+	virtual void ConfigureQueries() override;
+
+	virtual void Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context) override;
+
+	FMassEntityQuery RotatorsQuery;
+	TArray<FComplexMovementRotationCommitInfo> RotationCommitsThisFrame;
 };

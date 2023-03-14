@@ -58,6 +58,8 @@ void URTSComplexWalkingMovementTrait::BuildTemplate(FMassEntityTemplateBuildCont
 	BuildContext.AddFragment<FRTSPhysicsParamsFragment>();
 	BuildContext.AddFragment<FRTSSimRootFragment>();
 	BuildContext.AddFragment<FRTSCollisionBoundsFragment>();
+	BuildContext.AddTag<FRTSComplex3DMovementTag>();
+	BuildContext.AddTag<FRTSWalkingMovementTag>();
 	BuildContext.GetMutableObjectFragmentInitializers().Add([=](UObject& Owner, FMassEntityView& EntityView, const EMassTranslationDirection CurrentDirection)
 	{
 		AActor* actorowner = FRTSTraitHelpers::GetOwnerAsActor(&Owner);
@@ -123,8 +125,12 @@ void URTSComplexWalkingMovementTrait::BuildTemplate(FMassEntityTemplateBuildCont
 			physicsparams.Mass = (double)Mass;
 			physicsparams.Volume = (double)Volume;
 			physicsparams.Density = FRTSMath::IsNearlyZero(physicsparams.Mass) || FRTSMath::IsNearlyZero(physicsparams.Volume) ? 0.0 : physicsparams.Mass / physicsparams.Volume;
-
-			movecomplexparams.MaxWalkableAngle = FRTSMath::Cos(FRTSMath::DegreesToRadians((FRTSNumber64)((double)MaxWalkableAngle)));
+			/*FRTSNumber64 maxangledeg = (FRTSNumber64)((double)MaxWalkableAngle);
+			FRTSNumber64 maxanglerad = FRTSMath::DegreesToRadians(maxangledeg);
+			FRTSNumber64 maxangleradcos = FRTSMath::Cos(maxanglerad);
+			movecomplexparams.MaxWalkableAngle = maxangleradcos;*/
+			//movecomplexparams.MaxWalkableAngle = FRTSMath::Cos(FRTSMath::DegreesToRadians((FRTSNumber64)((double)MaxWalkableAngle)));
+			movecomplexparams.MaxWalkableAngle = FRTSMath::DegreesToRadians((FRTSNumber64)((double)MaxWalkableAngle)); 
 			movecomplexparams.StepUpHeight = (double)MaxStepUpHeight;
 			movecomplexparams.StepDownHeight = (double)MaxStepDownHeight;
 #else

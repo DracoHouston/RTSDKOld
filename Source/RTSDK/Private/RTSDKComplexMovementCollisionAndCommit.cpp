@@ -15,105 +15,72 @@ URTSDKComplexMovementCommit::URTSDKComplexMovementCommit()
 	RTSDK_PROCESSOR_EXEC_ORDER_MOVEMENT_COMPLEX_LOCATION_COMMIT
 }
 
-void URTSDKComplexMovementCommit::Initialize(UObject& Owner)
+URTSDKComplexRotationCommit::URTSDKComplexRotationCommit()
 {
-	Super::Initialize(Owner);
-	UMassSignalSubsystem* SignalSubsystem = UWorld::GetSubsystem<UMassSignalSubsystem>(Owner.GetWorld());
-	SubscribeToSignal(*SignalSubsystem, UE::Mass::Signals::RTSDKUnitHasVelocity);
+	bRequiresGameThreadExecution = true;
+	RTSDK_PROCESSOR_EXEC_ORDER_MOVEMENT_COMPLEX_ROTATION_COMMIT
 }
 
 void URTSDKComplexMovementCommit::ConfigureQueries()
 {
-	EntityQuery.AddRequirement<FRTSSimRootFragment>(EMassFragmentAccess::None);
-	EntityQuery.AddRequirement<FRTSCollisionBoundsFragment>(EMassFragmentAccess::None);
-	EntityQuery.AddRequirement<FRTSUnitIDFragment>(EMassFragmentAccess::None);
-	EntityQuery.AddRequirement<FRTSUnitComponentFragment>(EMassFragmentAccess::None);
-	EntityQuery.AddRequirement<FRTSMovementCoreParamsFragment>(EMassFragmentAccess::None);
-	EntityQuery.AddRequirement<FRTSMovementComplexWalkingParamsFragment>(EMassFragmentAccess::None);
-	EntityQuery.AddTagRequirement<FRTSComplex3DMovementTag>(EMassFragmentPresence::All);
-	EntityQuery.AddTagRequirement<FRTSWalkingMovementTag>(EMassFragmentPresence::All);
-	EntityQuery.AddRequirement<FRTSMovementFragment>(EMassFragmentAccess::None);
-
-	BasedMoversQuery.AddRequirement<FRTSSimRootFragment>(EMassFragmentAccess::ReadOnly);
-	BasedMoversQuery.AddRequirement<FRTSCollisionBoundsFragment>(EMassFragmentAccess::ReadOnly);
-	BasedMoversQuery.AddRequirement<FRTSUnitIDFragment>(EMassFragmentAccess::ReadOnly);
-	BasedMoversQuery.AddRequirement<FRTSUnitComponentFragment>(EMassFragmentAccess::ReadOnly);
-	BasedMoversQuery.AddRequirement<FRTSMovementBasisFragment>(EMassFragmentAccess::ReadWrite);
-	BasedMoversQuery.AddRequirement<FRTSMovementCoreParamsFragment>(EMassFragmentAccess::None);
-	BasedMoversQuery.AddRequirement<FRTSMovementComplexWalkingParamsFragment>(EMassFragmentAccess::ReadOnly);
-	BasedMoversQuery.AddRequirement<FRTSMovementFragment>(EMassFragmentAccess::ReadWrite);
+	BasedMoversQuery.AddRequirement<FRTSSimRootFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
+	BasedMoversQuery.AddRequirement<FRTSCollisionBoundsFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
+	BasedMoversQuery.AddRequirement<FRTSUnitIDFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
+	BasedMoversQuery.AddRequirement<FRTSUnitComponentFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
+	BasedMoversQuery.AddRequirement<FRTSVelocityFragment>(EMassFragmentAccess::ReadWrite, EMassFragmentPresence::All);
+	BasedMoversQuery.AddRequirement<FRTSCurrentLocationFragment>(EMassFragmentAccess::ReadWrite, EMassFragmentPresence::All);
+	BasedMoversQuery.AddRequirement<FRTSCurrentRotationFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
+	BasedMoversQuery.AddRequirement<FRTSMovementComplexWalkingParamsFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
+	BasedMoversQuery.AddRequirement<FRTSMovementBasisFragment>(EMassFragmentAccess::ReadWrite, EMassFragmentPresence::All);
 	BasedMoversQuery.AddTagRequirement<FRTSComplex3DMovementTag>(EMassFragmentPresence::All);
-	BasedMoversQuery.AddTagRequirement<FRTSWalkingMovementTag>(EMassFragmentPresence::All);
 
 	BasedMoversQuery.RegisterWithProcessor(*this);
 
-	AirMoversQuery.AddRequirement<FRTSSimRootFragment>(EMassFragmentAccess::ReadOnly);
-	AirMoversQuery.AddRequirement<FRTSCollisionBoundsFragment>(EMassFragmentAccess::ReadOnly);
-	AirMoversQuery.AddRequirement<FRTSUnitIDFragment>(EMassFragmentAccess::ReadOnly);
-	AirMoversQuery.AddRequirement<FRTSUnitComponentFragment>(EMassFragmentAccess::ReadOnly);
+	AirMoversQuery.AddRequirement<FRTSSimRootFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
+	AirMoversQuery.AddRequirement<FRTSCollisionBoundsFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
+	AirMoversQuery.AddRequirement<FRTSUnitIDFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
+	AirMoversQuery.AddRequirement<FRTSUnitComponentFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
+	AirMoversQuery.AddRequirement<FRTSVelocityFragment>(EMassFragmentAccess::ReadWrite, EMassFragmentPresence::All);
+	AirMoversQuery.AddRequirement<FRTSCurrentLocationFragment>(EMassFragmentAccess::ReadWrite, EMassFragmentPresence::All);
+	AirMoversQuery.AddRequirement<FRTSCurrentRotationFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
+	AirMoversQuery.AddRequirement<FRTSMovementComplexWalkingParamsFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
 	AirMoversQuery.AddRequirement<FRTSMovementBasisFragment>(EMassFragmentAccess::None, EMassFragmentPresence::None);
-	AirMoversQuery.AddRequirement<FRTSMovementCoreParamsFragment>(EMassFragmentAccess::None);
-	AirMoversQuery.AddRequirement<FRTSMovementComplexWalkingParamsFragment>(EMassFragmentAccess::ReadOnly);
-	AirMoversQuery.AddRequirement<FRTSMovementFragment>(EMassFragmentAccess::ReadWrite);
 	AirMoversQuery.AddTagRequirement<FRTSComplex3DMovementTag>(EMassFragmentPresence::All);
-	AirMoversQuery.AddTagRequirement<FRTSWalkingMovementTag>(EMassFragmentPresence::All);
 	
 	AirMoversQuery.RegisterWithProcessor(*this);
 }
 
-
-
-void URTSDKComplexMovementCommit::SignalEntities(FMassEntityManager& EntityManager, FMassExecutionContext& Context, FMassSignalNameLookup& EntitySignals)
+void URTSDKComplexRotationCommit::ConfigureQueries()
 {
-	
-	//TODO
-	//add penetration check on no collision when based moving, against just the movement base's primitive component
-	//look into a grid-snap system for collision results:
-	//standard 'collision grid' of some power of 2 fraction of 1, such as 32, 64, 128 etc
-	//use the grid snap function in frtsmath to do it under the hood, helper should exist for this
-	//helper eats a hit result returns a rts hit result using deterministic math types
-	//work out the distance between 2 points with FRTSVector64s and dont trust hitresult.distance
-	BasedMoversQuery.ForEachEntityChunk(EntityManager, Context, [this](FMassExecutionContext& Context)
-	{
-		TConstArrayView<FRTSSimRootFragment> roots = Context.GetFragmentView<FRTSSimRootFragment>();
-		TConstArrayView<FRTSUnitComponentFragment> unitcomps = Context.GetFragmentView<FRTSUnitComponentFragment>();
-		TConstArrayView<FRTSUnitIDFragment> unitids = Context.GetFragmentView<FRTSUnitIDFragment>();
-		TConstArrayView<FRTSCollisionBoundsFragment> bounds = Context.GetFragmentView<FRTSCollisionBoundsFragment>();
-		TConstArrayView<FRTSMovementComplexWalkingParamsFragment> complexparams = Context.GetFragmentView<FRTSMovementComplexWalkingParamsFragment>();
-		TConstArrayView<FMassEntityHandle> entities = Context.GetEntities();
-		TArrayView<FRTSMovementFragment> velocities = Context.GetMutableFragmentView<FRTSMovementFragment>();
-		TArrayView<FRTSMovementBasisFragment> bases = Context.GetMutableFragmentView<FRTSMovementBasisFragment>();
-		int32 entcount = Context.GetNumEntities();
-		for (int32 i = 0; i < entcount; i++)
-		{
-			FBasedWalkingMoveCommitInfo movecommit(roots[i].SimRoot.Get(), unitcomps[i].UnitComponent.Get(), velocities[i], bases[i], bounds[i], complexparams[i], unitids[i].UnitID, entities[i]);
-			BasedMoveCommitsThisFrame.Add(movecommit);
-			velocities[i].PreviousTransform = velocities[i].CurrentTransform;
-		}
-	});
-	AirMoversQuery.ForEachEntityChunk(EntityManager, Context, [this](FMassExecutionContext& Context)
-	{
-		TConstArrayView<FRTSSimRootFragment> roots = Context.GetFragmentView<FRTSSimRootFragment>();
-		TConstArrayView<FRTSUnitComponentFragment> unitcomps = Context.GetFragmentView<FRTSUnitComponentFragment>();
-		TConstArrayView<FRTSUnitIDFragment> unitids = Context.GetFragmentView<FRTSUnitIDFragment>();
-		TConstArrayView<FRTSCollisionBoundsFragment> bounds = Context.GetFragmentView<FRTSCollisionBoundsFragment>();
-		TConstArrayView<FRTSMovementComplexWalkingParamsFragment> complexparams = Context.GetFragmentView<FRTSMovementComplexWalkingParamsFragment>();
-		TConstArrayView<FMassEntityHandle> entities = Context.GetEntities();
-		TArrayView<FRTSMovementFragment> velocities = Context.GetMutableFragmentView<FRTSMovementFragment>();
-		int32 entcount = Context.GetNumEntities();
-		for (int32 i = 0; i < entcount; i++)
-		{
-			FAirWalkingMoveCommitInfo movecommit(roots[i].SimRoot.Get(), unitcomps[i].UnitComponent.Get(), velocities[i], bounds[i], complexparams[i], unitids[i].UnitID, entities[i]);
-			AirMoveCommitsThisFrame.Add(movecommit);
-			velocities[i].PreviousTransform = velocities[i].CurrentTransform;
-		}
-	});	
+	RotatorsQuery.AddRequirement<FRTSSimRootFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
+	RotatorsQuery.AddRequirement<FRTSCollisionBoundsFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
+	RotatorsQuery.AddRequirement<FRTSUnitIDFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
+	RotatorsQuery.AddRequirement<FRTSUnitComponentFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
+	RotatorsQuery.AddRequirement<FRTSAngularVelocityFragment>(EMassFragmentAccess::ReadWrite, EMassFragmentPresence::All);
+	RotatorsQuery.AddRequirement<FRTSCurrentLocationFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
+	RotatorsQuery.AddRequirement<FRTSCurrentRotationFragment>(EMassFragmentAccess::ReadWrite, EMassFragmentPresence::All);
+	RotatorsQuery.AddTagRequirement<FRTSComplex3DMovementTag>(EMassFragmentPresence::All);
+
+	RotatorsQuery.RegisterWithProcessor(*this);
 }
+
+//void URTSDKComplexMovementCommit::SignalEntities(FMassEntityManager& EntityManager, FMassExecutionContext& Context, FMassSignalNameLookup& EntitySignals)
+//{
+//	
+//	//TODO
+//	//add penetration check on no collision when based moving, against just the movement base's primitive component
+//	//look into a grid-snap system for collision results:
+//	//standard 'collision grid' of some power of 2 fraction of 1, such as 32, 64, 128 etc
+//	//use the grid snap function in frtsmath to do it under the hood, helper should exist for this
+//	//helper eats a hit result returns a rts hit result using deterministic math types
+//	//work out the distance between 2 points with FRTSVector64s and dont trust hitresult.distance
+//	
+//}
 
 //Sweeps capsule conforming to bounds along velocity.
 //Any collider with the BlocksUnits channel set to block will restrict the unit if hit.
 //Their velocity will be recalculated and a collision event will be queued on the unit
-FORCEINLINE_DEBUGGABLE void SweepAgainstBlocksUnits(
+void SweepAgainstBlocksUnits(
 	UWorld* inWorld,
 	URTSDKUnitComponent* inUnit,
 	const FCollisionShape& inCollisionShape,
@@ -122,7 +89,8 @@ FORCEINLINE_DEBUGGABLE void SweepAgainstBlocksUnits(
 	const FRTSQuat64& inRotation, 
 	FRTSVector64& outNewLocation,
 	FRTSVelocityFragment& outVelocityFragment,
-	FMassExecutionContext& Context)
+	bool& outCollided,
+	FHitResult& outCollisionResult)
 {
 	FHitResult Hit;
 	outNewLocation = inLocation + outVelocityFragment.Velocity;
@@ -143,23 +111,21 @@ FORCEINLINE_DEBUGGABLE void SweepAgainstBlocksUnits(
 	{
 		outVelocityFragment.Velocity = FMath::IsNearlyZero(Hit.Distance) ? FRTSVector64::ZeroVector : outVelocityFragment.Velocity.GetSafeNormal() * ((FRTSNumber64)Hit.Distance * FRTSNumber64::Make(0.95));
 		outNewLocation = inLocation + outVelocityFragment.Velocity;
-		//TODO: this should fire after both this and update floor for this hit if there are no closer hits from unwalkable WalkableTerrain channel colliders
-		//if it does it now, then the sweep for the unwalkable floors also collide they were closer and the real collision
-		//this event only fires for the thing that hit something, not the things being hit and there should only be 1 thing a unit hits per frame!
-		Context.Defer().PushCommand<FRTSDKBroadcastUnitOnCollidedCommand>(inEntity, inUnit, Hit);
+		outCollided = true;
+		outCollisionResult = Hit;
 	}
 }
 
 //Checks the floor angle against the gravity direction.
 //Returns true if the walkable angle is less than or equal to the angle.
 //Walkable angle is assumed to be the cos of the walkable angle.
-FORCEINLINE_DEBUGGABLE bool FloorAngleCheck(const FRTSVector64& inGravityDirection, const FRTSVector64& inFloorNormal, const FRTSNumber64& inWalkableAngle, FRTSNumber64& outFloorAngle)
+bool FloorAngleCheck(const FRTSVector64& inGravityDirection, const FRTSVector64& inFloorNormal, const FRTSNumber64& inWalkableAngle, FRTSNumber64& outFloorAngle)
 {
-	outFloorAngle = -inGravityDirection | inFloorNormal;
+	outFloorAngle = FRTSMath::Acos(-inGravityDirection | inFloorNormal);
 	return outFloorAngle <= inWalkableAngle;
 }
 
-FORCEINLINE_DEBUGGABLE bool RetryFloor(
+bool RetryFloor(
 	UPrimitiveComponent* inComponent,
 	const FRTSVector64& inGravityDirection,
 	const FCollisionShape& inCollisionShape,
@@ -187,16 +153,22 @@ FORCEINLINE_DEBUGGABLE bool RetryFloor(
 	return false;
 }
 
-FORCEINLINE_DEBUGGABLE void UpdateFloor(
+void UpdateFloor(
 	UWorld* inWorld,
 	URTSDKUnitComponent* inUnit,
+	UPrimitiveComponent* inOldBase,
 	const FCollisionShape& inCollisionShape,
 	const FRTSVector64& inGravityDirection, 
+	const FRTSVector64& inFeetLocation,
 	const FRTSMovementComplexWalkingParamsFragment& inWalkingParams,
+	const FRTSVector64& inCurrentLocation,
 	const FRTSQuat64& inRotation,
+	FRTSVelocityFragment& outVelocityFragment,
 	FRTSVector64& outNewLocation,
 	bool& outFoundBase,
-	FHitResult& outBestFloorResult)
+	FHitResult& outBestFloorResult,
+	bool& outCollidedWithUnsuitableBase,
+	FHitResult& outCollisionResult)
 {
 	FRTSVector64 stepupoffset = -inGravityDirection * inWalkingParams.StepUpHeight;
 	FRTSVector64 stepdownoffset = inGravityDirection * inWalkingParams.StepDownHeight;
@@ -254,7 +226,7 @@ FORCEINLINE_DEBUGGABLE void UpdateFloor(
 			else
 			{
 				//invalid, adding for collision
-				unsuitablebases.Add(retryhit.GetComponent());
+				unsuitablebases.Add(outBestFloorResult.GetComponent());
 			}			
 		}
 		else //not penetrating
@@ -280,8 +252,9 @@ FORCEINLINE_DEBUGGABLE void UpdateFloor(
 			FRTSNumber64 floorangle = 0.0;
 			FHitResult otherhit;
 			bool failedpenetrationtest;
+			UPrimitiveComponent* testedcomponent = BasisHits[hitsidx].GetComponent();
 			if (RetryFloor(
-				BasisHits[hitsidx].GetComponent(), 
+				testedcomponent,
 				inGravityDirection, 
 				inCollisionShape, 
 				outNewLocation, 
@@ -337,20 +310,49 @@ FORCEINLINE_DEBUGGABLE void UpdateFloor(
 					else
 					{
 						//invalid, adding for collision
-						unsuitablebases.Add(retryhit.GetComponent());
+						unsuitablebases.Add(testedcomponent);
 					}
 				}
 				else
 				{
 					//unwalkable, collide with it
-					unsuitablebases.Add(otherhit.GetComponent());
+					unsuitablebases.Add(testedcomponent);
 				}
 			}
 		}
 
+		if (outFoundBase && (outBestFloorResult.Component != inOldBase))
+		{
+			outNewLocation = outBestFloorResult.Location;// +-inFeetLocation;
+		}
+
 		//for each unwalkable WalkableTerrain component hit, sweep them as collision
 		FHitResult Hit;
-		//outNewLocation = inLocation + outVelocityFragment.Velocity;
+		outCollidedWithUnsuitableBase = false;
+		FRTSNumber64 closestdistance = UE_DOUBLE_BIG_NUMBER;
+		FHitResult closestblockingunsuitablebasehit;
+		for (int32 blockersidx = 0; blockersidx < unsuitablebases.Num(); blockersidx++)
+		{
+			if (unsuitablebases[blockersidx]->SweepComponent(
+				Hit,
+				inCurrentLocation,
+				outNewLocation,
+				inRotation,
+				inCollisionShape))
+			{
+				if ((FRTSNumber64)Hit.Distance < closestdistance)
+				{
+					closestdistance = Hit.Distance;
+					outCollisionResult = Hit;
+					outCollidedWithUnsuitableBase = true;
+				}
+			}
+		}
+		if (outCollidedWithUnsuitableBase)
+		{
+			outVelocityFragment.Velocity = FRTSMath::IsNearlyZero(closestdistance) ? FRTSVector64::ZeroVector : outVelocityFragment.Velocity.GetSafeNormal() * (closestdistance * FRTSNumber64::Make(0.95));
+			outNewLocation = inCurrentLocation + outVelocityFragment.Velocity;
+		}
 	}
 }
 
@@ -364,6 +366,8 @@ void URTSDKComplexMovementCommit::ProcessBasedMovers(FMassEntityManager& EntityM
 		FCollisionShape boundsbox = FCollisionShape::MakeCapsule(BasedMoveCommitsThisFrame[i].Bounds.BoundsRadius, BasedMoveCommitsThisFrame[i].Bounds.BoundsHalfHeight);
 		FRTSVector64 testlocation;
 		FRTSQuat64 rotquat = BasedMoveCommitsThisFrame[i].Rotation.Rotation.Quaternion();
+		bool collidedblocksunits = false;
+		FHitResult blocksunitshit;
 		SweepAgainstBlocksUnits(
 			world,
 			BasedMoveCommitsThisFrame[i].UnitComponent,
@@ -373,226 +377,53 @@ void URTSDKComplexMovementCommit::ProcessBasedMovers(FMassEntityManager& EntityM
 			rotquat,
 			testlocation,
 			BasedMoveCommitsThisFrame[i].Velocity,
-			Context);
-		
-		FRTSVector64 stepupoffset = -gravdir * BasedMoveCommitsThisFrame[i].WalkingParams.StepUpHeight;
-		FRTSVector64 stepdownoffset = gravdir * BasedMoveCommitsThisFrame[i].WalkingParams.StepDownHeight;
-		FRTSVector64 start = testlocation + stepupoffset;
-		FRTSVector64 end = testlocation + stepdownoffset;
-
-		TArray<FHitResult> BasisHits;
-		FCollisionShape basisboundsbox = FCollisionShape::MakeCapsule(BasedMoveCommitsThisFrame[i].bounds.BoundsRadius, 0.5);
-		FRTSNumber64 bestfloorangle;
-		FRTSNumber64 bestfloordistance;
-		FHitResult bestfloorhit;
+			collidedblocksunits,
+			blocksunitshit);
 		bool foundbase = false;
-		TArray<UPrimitiveComponent*> unsuitablebases;
-		if (world->SweepMultiByChannel
-		(
-			BasisHits,
-			start,
-			end,
-			testtransform.GetRotation(),
-			ECollisionChannel::ECC_GameTraceChannel1,
-			basisboundsbox,
-			collisionqueryparams))
-		{
-			bestfloorhit = BasisHits[BasisHits.Num() - 1];
-			if ((bestfloorhit.bStartPenetrating) && (bestfloorhit.PenetrationDepth > 0.0))
-			{
-				FRTSVector64 testpos = testtransform.GetTranslation() + ((FRTSVector64)bestfloorhit.Normal * (FRTSNumber64)bestfloorhit.PenetrationDepth);
-				FRTSVector64 teststart = testpos + stepupoffset;
-				FRTSVector64 testend = testpos + stepdownoffset;
-				if (bestfloorhit.GetComponent()->SweepComponent(Hit, teststart, testend, testtransform.GetRotation(), basisboundsbox))
-				{
-					if (!Hit.bStartPenetrating)
-					{
-						bestfloorhit = Hit;
-						bestfloordistance = (testpos - bestfloorhit.Location).SizeSquared();
-						bestfloorangle = FRTSMath::Acos(-gravdir | bestfloorhit.ImpactNormal);
-						if (bestfloorangle < BasedMoveCommitsThisFrame[i].complexparams.MaxWalkableAngle)
-						{
-							foundbase = true;
-						}
-						else
-						{
-							unsuitablebases.Add(Hit.GetComponent());
-						}
-					}
-				}
-			}
-			else
-			{
-				bestfloordistance = (testtransform.GetTranslation() - bestfloorhit.Location).SizeSquared();
-				bestfloorangle = FRTSMath::Acos(-gravdir | bestfloorhit.ImpactNormal);
-				if (bestfloorangle < BasedMoveCommitsThisFrame[i].complexparams.MaxWalkableAngle)
-				{
-					foundbase = true;
-				}
-				else
-				{
-					unsuitablebases.Add(bestfloorhit.GetComponent());
-				}
-			}
-			for (int32 hitsidx = BasisHits.Num() - 2; hitsidx >= 0; hitsidx--)
-			{
-				if (BasisHits[hitsidx].GetComponent()->SweepComponent(Hit, start, end, testtransform.GetRotation(), basisboundsbox))
-				{
-					if (Hit.bStartPenetrating)
-					{
-						if (Hit.PenetrationDepth > 0.0)
-						{
-							FRTSVector64 testpos = testtransform.GetTranslation() + ((FRTSVector64)Hit.Normal * (FRTSNumber64)Hit.PenetrationDepth);
-							FRTSVector64 teststart = testpos + stepupoffset;
-							FRTSVector64 testend = testpos + stepdownoffset;
-							if (Hit.GetComponent()->SweepComponent(Hit, teststart, testend, testtransform.GetRotation(), basisboundsbox))
-							{
-								if (!Hit.bStartPenetrating)
-								{
-
-									FRTSNumber64 testfloordistance = (testpos - (FRTSVector64)Hit.Location).SizeSquared();
-									FRTSNumber64 testfloorangle = FRTSMath::Acos(-gravdir | (FRTSVector64)Hit.ImpactNormal);
-									if (testfloorangle < BasedMoveCommitsThisFrame[i].complexparams.MaxWalkableAngle)
-									{
-										if (testfloordistance < bestfloordistance)
-										{
-											bestfloorhit = Hit;
-											bestfloordistance = testfloordistance;
-											bestfloorangle = testfloorangle;
-											foundbase = true;
-										}
-									}
-									else
-									{
-										unsuitablebases.Add(Hit.GetComponent());
-									}
-								}
-							}
-						}
-						else
-						{
-							unsuitablebases.Add(Hit.GetComponent());
-						}
-					}
-					else
-					{
-						FRTSNumber64 testfloordistance = (testtransform.GetTranslation() - (FRTSVector64)Hit.Location).SizeSquared();
-						FRTSNumber64 testfloorangle = FRTSMath::Acos(-gravdir | (FRTSVector64)Hit.ImpactNormal);
-						if (testfloorangle < BasedMoveCommitsThisFrame[i].complexparams.MaxWalkableAngle)
-						{
-							if (testfloordistance < bestfloordistance)
-							{
-								bestfloorhit = Hit;
-								bestfloordistance = testfloordistance;
-								bestfloorangle = testfloorangle;
-								foundbase = true;
-							}
-						}
-						else
-						{
-							unsuitablebases.Add(Hit.GetComponent());
-						}
-					}
-				}
-			}
-		}
-
-		bool foundblockingunsuitablebase = false;
-		FRTSNumber64 closestdistance = UE_DOUBLE_BIG_NUMBER;
-		FHitResult closestblockingunsuitablebasehit;
-		for (int32 blockersidx = 0; blockersidx < unsuitablebases.Num(); blockersidx++)
-		{
-			if (unsuitablebases[blockersidx]->SweepComponent(
-				Hit, 
-				BasedMoveCommitsThisFrame[i].movefragment.CurrentTransform.GetTranslation(), 
-				testtransform.GetTranslation(), 
-				testtransform.GetRotation(), 
-				basisboundsbox))
-			{
-				if ((FRTSNumber64)Hit.Distance < closestdistance)
-				{
-					closestdistance = Hit.Distance;
-					closestblockingunsuitablebasehit = Hit;
-					foundblockingunsuitablebase = true;
-				}
-			}
-		}
+		bool collidedwithunsuitablebase = false;
+		FHitResult floorresult;
+		FHitResult basecollision;
+		//FCollisionShape basisboundsbox = FCollisionShape::MakeCapsule(BasedMoveCommitsThisFrame[i].Bounds.BoundsRadius, 0.5);
+		UpdateFloor(
+			world,
+			BasedMoveCommitsThisFrame[i].UnitComponent,
+			BasedMoveCommitsThisFrame[i].Basis.Basis.Get(),
+			boundsbox,
+			gravdir,
+			BasedMoveCommitsThisFrame[i].Bounds.FeetLocation,
+			BasedMoveCommitsThisFrame[i].WalkingParams,
+			BasedMoveCommitsThisFrame[i].Location.Location,
+			BasedMoveCommitsThisFrame[i].Rotation.Rotation.Quaternion(),
+			BasedMoveCommitsThisFrame[i].Velocity,
+			testlocation,
+			foundbase,
+			floorresult,
+			collidedwithunsuitablebase,
+			basecollision);
 
 		if (foundbase)
 		{
-			if (bestfloorhit.Component != BasedMoveCommitsThisFrame[i].basisfragment.Basis)
-			{
-				testtransform.SetTranslation(bestfloorhit.Location + -BasedMoveCommitsThisFrame[i].bounds.FeetLocation);
-			}
-
-			BasedMoveCommitsThisFrame[i].basisfragment.Basis = bestfloorhit.Component;
-			BasedMoveCommitsThisFrame[i].basisfragment.Impact = bestfloorhit;
+			BasedMoveCommitsThisFrame[i].Basis.Basis = floorresult.Component;
+			BasedMoveCommitsThisFrame[i].Basis.Impact = floorresult;
 		}
 		else
 		{
-			Context.Defer().RemoveFragment<FRTSMovementBasisFragment>(BasedMoveCommitsThisFrame[i].entity);
+			Context.Defer().RemoveFragment<FRTSMovementBasisFragment>(BasedMoveCommitsThisFrame[i].Entity);
+			BasedMoveCommitsThisFrame[i].SimRoot->ComponentTags.Add(RTSDK::FallingUnitComponentTag);
 		}
 		
-		if (foundblockingunsuitablebase)
+		if (collidedwithunsuitablebase)
 		{
-			BasedMoveCommitsThisFrame[i].movefragment.Velocity = FRTSMath::IsNearlyZero(closestdistance) ? FRTSVector64::ZeroVector : BasedMoveCommitsThisFrame[i].movefragment.Velocity.GetSafeNormal() * (closestdistance * FRTSNumber64::Make(0.95));
-			testtransform = BasedMoveCommitsThisFrame[i].movefragment.CurrentTransform;
-			testtransform.AddToTranslation(BasedMoveCommitsThisFrame[i].movefragment.Velocity);
-			Context.Defer().PushCommand<FRTSDKBroadcastUnitOnCollidedCommand>(BasedMoveCommitsThisFrame[i].entity, BasedMoveCommitsThisFrame[i].unitcomponent, closestblockingunsuitablebasehit);
+			Context.Defer().PushCommand<FRTSDKBroadcastUnitOnCollidedCommand>(BasedMoveCommitsThisFrame[i].Entity, BasedMoveCommitsThisFrame[i].UnitComponent, basecollision);
 		}
-		FTransform othertesttransform = testtransform;
-		FQuat otherrotationquat = othertesttransform.GetRotation();
-		FRotator otherrot = otherrotationquat.Rotator();
-		FRotator newotherrot = otherrot + (FRotator)BasedMoveCommitsThisFrame[i].movefragment.AngularVelocity;
-		newotherrot.Normalize();
-		FQuat newotherquat = newotherrot.Quaternion();
+		else if (collidedblocksunits)
+		{
+			Context.Defer().PushCommand<FRTSDKBroadcastUnitOnCollidedCommand>(BasedMoveCommitsThisFrame[i].Entity, BasedMoveCommitsThisFrame[i].UnitComponent, blocksunitshit);
+		}
 
-		FRTSQuat64 rotationquat = testtransform.GetRotation();
-		FRTSQuat64 yawquat = FRTSQuat64(FRTSVector64::UpVector, FRTSMath::DegreesToRadians(BasedMoveCommitsThisFrame[i].movefragment.AngularVelocity.Yaw));
-		FRTSRotator64 yawrotator = yawquat.Rotator();//yaw
-		FRTSQuat64 rollquat = FRTSQuat64(FRTSVector64::BackwardVector, FRTSMath::DegreesToRadians(BasedMoveCommitsThisFrame[i].movefragment.AngularVelocity.Roll));
-		FRTSRotator64 rollrotator = rollquat.Rotator();//roll, swap
-		FRTSQuat64 pitchquat = FRTSQuat64(FRTSVector64::LeftVector, FRTSMath::DegreesToRadians(BasedMoveCommitsThisFrame[i].movefragment.AngularVelocity.Pitch));
-		FRTSRotator64 pitchrotator = pitchquat.Rotator();//pitch, swap
-		FRTSQuat64 combinedquat = BasedMoveCommitsThisFrame[i].movefragment.AngularVelocity.Quaternion();
-		FRTSRotator64 combinedrotator = combinedquat.Rotator();
-		FRTSRotator64 resultrotator = rotationquat.Rotator();
-		/*rotationquat *= rollquat;
-		rotationquat.Normalize();
-		resultrotator = rotationquat.Rotator();
-		rotationquat *= yawquat;
-		rotationquat.Normalize();
-		resultrotator = rotationquat.Rotator();
-		rotationquat *= pitchquat;
-		rotationquat.Normalize();
-		resultrotator = rotationquat.Rotator();*/
-		//rotationquat  = rotationquat.Inverse() * combinedquat;
-		//rotationquat = pitchquat * rotationquat;
-		//rotationquat.Normalize();
-		//resultrotator = rotationquat.Rotator();
-		//rotationquat = yawquat * rotationquat;
-		//rotationquat.Normalize();
-		//resultrotator = rotationquat.Rotator();
-		//rotationquat = rollquat * rotationquat;
-		//rotationquat.Normalize();
-		//resultrotator = rotationquat.Rotator();
-
-		//testtransform.SetRotation(rotationquat);
-
-		//FRTSQuat64 rotationquat = testtransform.GetRotation();
-		//FRTSRotator64 rot = rotationquat.Rotator();
-		//FRTSRotator64 newrot = rot + BasedMoveCommitsThisFrame[i].movefragment.AngularVelocity;
-		////newrot.Normalize();
-		//FRTSQuat64 newquat = newrot.Quaternion();
-		////testtransform.SetRotation(newquat);
-		////testtransform.SetRotation((testtransform.GetRotation().Rotator() + BasedMoveCommitsThisFrame[i].movefragment.AngularVelocity).GetNormalized().Quaternion());
-		///*testtransform.ConcatenateRotation(BasedMoveCommitsThisFrame[i].movefragment.AngularVelocity.Quaternion());
-		//testtransform.NormalizeRotation();*/
-		BasedMoveCommitsThisFrame[i].simroot->SetWorldLocation(testtransform.GetTranslation());
-		BasedMoveCommitsThisFrame[i].simroot->AddLocalRotation(combinedquat);
-		testtransform.SetRotation(BasedMoveCommitsThisFrame[i].simroot->GetRelativeTransform().GetRotation());
-		BasedMoveCommitsThisFrame[i].simroot->ComponentVelocity = BasedMoveCommitsThisFrame[i].movefragment.Velocity;
-		BasedMoveCommitsThisFrame[i].movefragment.CurrentTransform = testtransform;
+		BasedMoveCommitsThisFrame[i].SimRoot->SetWorldLocation(testlocation);
+		BasedMoveCommitsThisFrame[i].SimRoot->ComponentVelocity = BasedMoveCommitsThisFrame[i].Velocity.Velocity;
+		BasedMoveCommitsThisFrame[i].Location.Location = testlocation;
 	}
 }
 
@@ -605,7 +436,9 @@ void URTSDKComplexMovementCommit::ProcessAirMovers(FMassEntityManager& EntityMan
 	{
 		FCollisionShape boundsbox = FCollisionShape::MakeCapsule(AirMoveCommitsThisFrame[i].Bounds.BoundsRadius, AirMoveCommitsThisFrame[i].Bounds.BoundsHalfHeight);
 		FRTSVector64 testlocation;
-		FRTSQuat64 rotquat = BasedMoveCommitsThisFrame[i].Rotation.Rotation.Quaternion();
+		FRTSQuat64 rotquat = AirMoveCommitsThisFrame[i].Rotation.Rotation.Quaternion();
+		bool collidedblocksunits = false;
+		FHitResult blocksunitshit;
 		SweepAgainstBlocksUnits(
 			world,
 			AirMoveCommitsThisFrame[i].UnitComponent,
@@ -615,193 +448,52 @@ void URTSDKComplexMovementCommit::ProcessAirMovers(FMassEntityManager& EntityMan
 			rotquat,
 			testlocation,
 			AirMoveCommitsThisFrame[i].Velocity,
-			Context);
-
-		FRTSVector64 stepupoffset = -gravdir * AirMoveCommitsThisFrame[i].WalkingParams.StepUpHeight;
-		FRTSVector64 stepdownoffset = gravdir * AirMoveCommitsThisFrame[i].WalkingParams.StepDownHeight;
-		FRTSVector64 start = testlocation + stepupoffset;
-		FRTSVector64 end = testlocation + stepdownoffset;
-
-		TArray<FHitResult> BasisHits;
-		FCollisionShape basisboundsbox = FCollisionShape::MakeCapsule(AirMoveCommitsThisFrame[i].bounds.BoundsRadius, 0.5);
-		FRTSNumber64 bestfloorangle;
-		FRTSNumber64 bestfloordistance;
-		FHitResult bestfloorhit;
+			collidedblocksunits,
+			blocksunitshit);
 		bool foundbase = false;
-		bool foundunsuitablebase = false;
-		if (world->SweepMultiByChannel
-		(
-			BasisHits,
-			start,
-			end,
-			testtransform.GetRotation(),
-			ECollisionChannel::ECC_GameTraceChannel1,
-			basisboundsbox,
-			collisionqueryparams
-		))
-		{
-			bestfloorhit = BasisHits[BasisHits.Num() - 1];
-			if ((bestfloorhit.bStartPenetrating) && (bestfloorhit.PenetrationDepth > 0.0))
-			{
-				FRTSVector64 testpos = testtransform.GetTranslation() + ((FRTSVector64)bestfloorhit.Normal * (FRTSNumber64)bestfloorhit.PenetrationDepth);
-				FRTSVector64 teststart = testpos + stepupoffset;
-				FRTSVector64 testend = testpos + stepdownoffset;
-				if (bestfloorhit.GetComponent()->SweepComponent(Hit, teststart, testend, testtransform.GetRotation(), basisboundsbox))
-				{
-					if (!Hit.bStartPenetrating)
-					{
-						bestfloorhit = Hit;
-						bestfloordistance = (testpos - (FRTSVector64)bestfloorhit.Location).SizeSquared();
-						bestfloorangle = FRTSMath::Acos(-gravdir | (FRTSVector64)bestfloorhit.ImpactNormal);
-						if (bestfloorangle < AirMoveCommitsThisFrame[i].complexparams.MaxWalkableAngle)
-						{
-							foundbase = true;
-						}
-						else
-						{
-							foundunsuitablebase = true;
-						}
-					}
-				}
-			}
-			else
-			{
-				bestfloordistance = (testtransform.GetTranslation() - (FRTSVector64)bestfloorhit.Location).SizeSquared();
-				bestfloorangle = FRTSMath::Acos(-gravdir | (FRTSVector64)bestfloorhit.ImpactNormal);
-				if (bestfloorangle < AirMoveCommitsThisFrame[i].complexparams.MaxWalkableAngle)
-				{
-					foundbase = true;
-				}
-				else
-				{
-					foundunsuitablebase = true;
-				}
-			}
-			for (int32 hitsidx = BasisHits.Num() - 2; hitsidx >= 0; hitsidx--)
-			{
-				if (BasisHits[hitsidx].GetComponent()->SweepComponent(Hit, start, end, testtransform.GetRotation(), basisboundsbox))
-				{
-					if ((Hit.bStartPenetrating) && (Hit.PenetrationDepth > 0.0))
-					{
-						FRTSVector64 testpos = testtransform.GetTranslation() + ((FRTSVector64)Hit.Normal * (FRTSNumber64)Hit.PenetrationDepth);
-						FRTSVector64 teststart = testpos + stepupoffset;
-						FRTSVector64 testend = testpos + stepdownoffset;
-						if (bestfloorhit.GetComponent()->SweepComponent(Hit, teststart, testend, testtransform.GetRotation(), basisboundsbox))
-						{
-							if (!Hit.bStartPenetrating)
-							{
-								
-								FRTSNumber64 testfloordistance = (testpos - (FRTSVector64)bestfloorhit.Location).SizeSquared();
-								FRTSNumber64 testfloorangle = FRTSMath::Acos(-gravdir | (FRTSVector64)bestfloorhit.ImpactNormal);
-								if ((testfloorangle < AirMoveCommitsThisFrame[i].complexparams.MaxWalkableAngle) && (testfloordistance < bestfloordistance))
-								{
-									bestfloorhit = Hit;
-									bestfloordistance = testfloordistance;
-									bestfloorangle = testfloorangle;
-									foundbase = true;
-								}
-								else
-								{
-									foundunsuitablebase = true;
-								}
-							}
-						}
-					}
-					else
-					{
-						FRTSNumber64 testfloordistance = (testtransform.GetTranslation() - (FRTSVector64)bestfloorhit.Location).SizeSquared();
-						FRTSNumber64 testfloorangle = FRTSMath::Acos(-gravdir | (FRTSVector64)bestfloorhit.ImpactNormal);
-						if ((testfloorangle < AirMoveCommitsThisFrame[i].complexparams.MaxWalkableAngle) && (testfloordistance < bestfloordistance))
-						{
-							bestfloorhit = Hit;
-							bestfloordistance = testfloordistance;
-							bestfloorangle = testfloorangle;
-							foundbase = true;
-						}
-						else
-						{
-							foundunsuitablebase = true;
-						}
-					}
-				}
-			}
-		}
+		bool collidedwithunsuitablebase = false;
+		FHitResult floorresult;
+		FHitResult basecollision;
+		//FCollisionShape basisboundsbox = FCollisionShape::MakeCapsule(AirMoveCommitsThisFrame[i].Bounds.BoundsRadius, 0.5);
+		UpdateFloor(
+			world,
+			AirMoveCommitsThisFrame[i].UnitComponent,
+			nullptr,
+			boundsbox,
+			gravdir,
+			AirMoveCommitsThisFrame[i].Bounds.FeetLocation,
+			AirMoveCommitsThisFrame[i].WalkingParams,
+			AirMoveCommitsThisFrame[i].Location.Location,
+			AirMoveCommitsThisFrame[i].Rotation.Rotation.Quaternion(),
+			AirMoveCommitsThisFrame[i].Velocity,
+			testlocation,
+			foundbase,
+			floorresult,
+			collidedwithunsuitablebase,
+			basecollision);
+
 		if (foundbase)
 		{
-			testtransform.SetTranslation(bestfloorhit.Location + -AirMoveCommitsThisFrame[i].bounds.FeetLocation);
-			AirMoveCommitsThisFrame[i].movefragment.Velocity = FRTSVector64::ZeroVector;
-			
-			FRTSMovementBasisFragment newbasis;
-			newbasis.Basis = bestfloorhit.Component;
-			newbasis.Impact = bestfloorhit;
-			Context.Defer().PushCommand<FMassCommandAddFragmentInstances>(AirMoveCommitsThisFrame[i].entity, newbasis);
+			FRTSMovementBasisFragment basis;
+			basis.Basis = floorresult.Component;
+			basis.Impact = floorresult;
+			Context.Defer().PushCommand<FMassCommandAddFragmentInstances>(AirMoveCommitsThisFrame[i].Entity, basis);
+			AirMoveCommitsThisFrame[i].Velocity.Velocity = FRTSVector64::ZeroVector;
+			AirMoveCommitsThisFrame[i].SimRoot->ComponentTags.Remove(RTSDK::FallingUnitComponentTag);
 		}
-		else
+
+		if (collidedwithunsuitablebase)
 		{
-			if (foundunsuitablebase && (world->SweepSingleByChannel
-			(
-				Hit,
-				AirMoveCommitsThisFrame[i].movefragment.CurrentTransform.GetTranslation(),
-				testtransform.GetTranslation(),
-				AirMoveCommitsThisFrame[i].movefragment.CurrentTransform.GetRotation(),
-				ECollisionChannel::ECC_GameTraceChannel1,
-				boundsbox,
-				collisionqueryparams
-			)))
-			{
-				AirMoveCommitsThisFrame[i].movefragment.Velocity = FMath::IsNearlyZero(Hit.Distance) ? FRTSVector64::ZeroVector : AirMoveCommitsThisFrame[i].movefragment.Velocity.GetSafeNormal() * ((FRTSNumber64)Hit.Distance * FRTSNumber64::Make(0.95));
-				testtransform = AirMoveCommitsThisFrame[i].movefragment.CurrentTransform;
-				testtransform.AddToTranslation(AirMoveCommitsThisFrame[i].movefragment.Velocity);
-				Context.Defer().PushCommand<FRTSDKBroadcastUnitOnCollidedCommand>(AirMoveCommitsThisFrame[i].entity, AirMoveCommitsThisFrame[i].unitcomponent, Hit);
-			}
+			Context.Defer().PushCommand<FRTSDKBroadcastUnitOnCollidedCommand>(AirMoveCommitsThisFrame[i].Entity, AirMoveCommitsThisFrame[i].UnitComponent, basecollision);
 		}
-		FTransform othertesttransform = testtransform;
-		FQuat otherrotationquat = othertesttransform.GetRotation();
-		FRotator otherrot = otherrotationquat.Rotator();
-		FRotator newotherrot = otherrot + (FRotator)AirMoveCommitsThisFrame[i].movefragment.AngularVelocity;
-		newotherrot.Normalize();
-		FQuat newotherquat = newotherrot.Quaternion();
+		else if (collidedblocksunits)
+		{
+			Context.Defer().PushCommand<FRTSDKBroadcastUnitOnCollidedCommand>(AirMoveCommitsThisFrame[i].Entity, AirMoveCommitsThisFrame[i].UnitComponent, blocksunitshit);
+		}
 
-		/*FRTSQuat64 rotationquat = testtransform.GetRotation();
-		FRTSQuat64 pitchquat = FRTSQuat64(FRTSVector64::UpVector, FRTSMath::DegreesToRadians(AirMoveCommitsThisFrame[i].movefragment.AngularVelocity.Pitch));
-		FRTSQuat64 yawquat = FRTSQuat64(FRTSVector64::ForwardVector, FRTSMath::DegreesToRadians(AirMoveCommitsThisFrame[i].movefragment.AngularVelocity.Yaw));
-		FRTSQuat64 rollquat = FRTSQuat64(FRTSVector64::RightVector, FRTSMath::DegreesToRadians(AirMoveCommitsThisFrame[i].movefragment.AngularVelocity.Roll));*/
-		FRTSQuat64 rotationquat = testtransform.GetRotation();
-		FRTSQuat64 yawquat = FRTSQuat64(FRTSVector64::UpVector, FRTSMath::DegreesToRadians(AirMoveCommitsThisFrame[i].movefragment.AngularVelocity.Yaw));
-		FRTSRotator64 yawrotator = yawquat.Rotator();//yaw
-		FRTSQuat64 rollquat = FRTSQuat64(FRTSVector64::BackwardVector, FRTSMath::DegreesToRadians(AirMoveCommitsThisFrame[i].movefragment.AngularVelocity.Roll));
-		FRTSRotator64 rollrotator = rollquat.Rotator();//roll, swap
-		FRTSQuat64 pitchquat = FRTSQuat64(FRTSVector64::LeftVector, FRTSMath::DegreesToRadians(AirMoveCommitsThisFrame[i].movefragment.AngularVelocity.Pitch));
-		FRTSRotator64 pitchrotator = pitchquat.Rotator();//pitch, swap
-
-		FRTSQuat64 combinedquat = AirMoveCommitsThisFrame[i].movefragment.AngularVelocity.Quaternion();
-		rotationquat *= pitchquat;
-		rotationquat.Normalize();
-		rotationquat *= yawquat;
-		rotationquat.Normalize();
-		rotationquat *= rollquat;
-		rotationquat.Normalize();
-		/*rotationquat = pitchquat * rotationquat;
-		rotationquat.Normalize();
-		rotationquat = yawquat * rotationquat;
-		rotationquat.Normalize();
-		rotationquat = rollquat * rotationquat;
-		rotationquat.Normalize();*/
-
-		//testtransform.SetRotation(rotationquat);
-		//FRTSRotator64 rot = rotationquat.Rotator();
-		//FRTSRotator64 newrot = rot + AirMoveCommitsThisFrame[i].movefragment.AngularVelocity;
-		//newrot.Normalize();
-		//FRTSQuat64 newquat = newrot.Quaternion();
-		//testtransform.SetRotation(rotationquat);
-		//testtransform.SetRotation((testtransform.GetRotation().Rotator() + AirMoveCommitsThisFrame[i].movefragment.AngularVelocity).Quaternion());
-		//testtransform.ConcatenateRotation(AirMoveCommitsThisFrame[i].movefragment.AngularVelocity.Quaternion());
-		//testtransform.NormalizeRotation();
-		AirMoveCommitsThisFrame[i].simroot->SetWorldLocation(testtransform.GetTranslation());
-		AirMoveCommitsThisFrame[i].simroot->AddLocalRotation(combinedquat);
-		testtransform = AirMoveCommitsThisFrame[i].simroot->GetComponentTransform();
-		AirMoveCommitsThisFrame[i].simroot->ComponentVelocity = AirMoveCommitsThisFrame[i].movefragment.Velocity;
-		AirMoveCommitsThisFrame[i].movefragment.CurrentTransform = testtransform;
+		AirMoveCommitsThisFrame[i].SimRoot->SetWorldLocation(testlocation);
+		AirMoveCommitsThisFrame[i].SimRoot->ComponentVelocity = AirMoveCommitsThisFrame[i].Velocity.Velocity;
+		AirMoveCommitsThisFrame[i].Location.Location = testlocation;
 	}
 }
 
@@ -810,11 +502,116 @@ void URTSDKComplexMovementCommit::Execute(FMassEntityManager& EntityManager, FMa
 	BasedMoveCommitsThisFrame.Empty();
 	AirMoveCommitsThisFrame.Empty();
 	
-	Super::Execute(EntityManager, Context);
+	BasedMoversQuery.ForEachEntityChunk(EntityManager, Context, [this](FMassExecutionContext& Context)
+	{
+		TConstArrayView<FRTSSimRootFragment> roots = Context.GetFragmentView<FRTSSimRootFragment>();
+		TConstArrayView<FRTSUnitComponentFragment> unitcomps = Context.GetFragmentView<FRTSUnitComponentFragment>();
+		TConstArrayView<FRTSUnitIDFragment> unitids = Context.GetFragmentView<FRTSUnitIDFragment>();
+		TConstArrayView<FRTSCollisionBoundsFragment> bounds = Context.GetFragmentView<FRTSCollisionBoundsFragment>();
+		TConstArrayView<FRTSMovementComplexWalkingParamsFragment> complexparams = Context.GetFragmentView<FRTSMovementComplexWalkingParamsFragment>();
+		TConstArrayView<FMassEntityHandle> entities = Context.GetEntities();
+		TArrayView<FRTSVelocityFragment> velocities = Context.GetMutableFragmentView<FRTSVelocityFragment>();
+		TArrayView<FRTSCurrentLocationFragment> locations = Context.GetMutableFragmentView<FRTSCurrentLocationFragment>();
+		TArrayView<FRTSCurrentRotationFragment> rotations = Context.GetMutableFragmentView<FRTSCurrentRotationFragment>();
+		TArrayView<FRTSMovementBasisFragment> bases = Context.GetMutableFragmentView<FRTSMovementBasisFragment>();
+		int32 entcount = Context.GetNumEntities();
+		for (int32 i = 0; i < entcount; i++)
+		{
+			if (velocities[i].Velocity.IsNearlyZero())
+			{
+				continue;
+			}
+			FBasedWalkingMoveCommitInfo movecommit(
+				roots[i].SimRoot.Get(), 
+				unitcomps[i].UnitComponent.Get(), 
+				locations[i], 
+				rotations[i], 
+				velocities[i], 
+				bases[i], 
+				bounds[i], 
+				complexparams[i], 
+				unitids[i].UnitID, 
+				entities[i]);
+			BasedMoveCommitsThisFrame.Add(movecommit);
+		}
+	});
+	AirMoversQuery.ForEachEntityChunk(EntityManager, Context, [this](FMassExecutionContext& Context)
+	{
+		TConstArrayView<FRTSSimRootFragment> roots = Context.GetFragmentView<FRTSSimRootFragment>();
+		TConstArrayView<FRTSUnitComponentFragment> unitcomps = Context.GetFragmentView<FRTSUnitComponentFragment>();
+		TConstArrayView<FRTSUnitIDFragment> unitids = Context.GetFragmentView<FRTSUnitIDFragment>();
+		TConstArrayView<FRTSCollisionBoundsFragment> bounds = Context.GetFragmentView<FRTSCollisionBoundsFragment>();
+		TConstArrayView<FRTSMovementComplexWalkingParamsFragment> complexparams = Context.GetFragmentView<FRTSMovementComplexWalkingParamsFragment>();
+		TConstArrayView<FMassEntityHandle> entities = Context.GetEntities();
+		TArrayView<FRTSVelocityFragment> velocities = Context.GetMutableFragmentView<FRTSVelocityFragment>();
+		TArrayView<FRTSCurrentLocationFragment> locations = Context.GetMutableFragmentView<FRTSCurrentLocationFragment>();
+		TArrayView<FRTSCurrentRotationFragment> rotations = Context.GetMutableFragmentView<FRTSCurrentRotationFragment>();
+		int32 entcount = Context.GetNumEntities();
+		for (int32 i = 0; i < entcount; i++)
+		{
+			if (velocities[i].Velocity.IsNearlyZero())
+			{
+				continue;
+			}
+			FAirWalkingMoveCommitInfo movecommit(
+				roots[i].SimRoot.Get(), 
+				unitcomps[i].UnitComponent.Get(), 
+				locations[i], 
+				rotations[i], 
+				velocities[i],
+				bounds[i], 
+				complexparams[i], 
+				unitids[i].UnitID, 
+				entities[i]);
+			AirMoveCommitsThisFrame.Add(movecommit);
+		}
+	});	
 
 	BasedMoveCommitsThisFrame.Sort();
 	AirMoveCommitsThisFrame.Sort();
 	
 	ProcessBasedMovers(EntityManager, Context);
 	ProcessAirMovers(EntityManager, Context);
+}
+
+void URTSDKComplexRotationCommit::Execute(FMassEntityManager& EntityManager, FMassExecutionContext& Context)
+{
+	RotationCommitsThisFrame.Empty();
+	
+	RotatorsQuery.ForEachEntityChunk(EntityManager, Context, [this](FMassExecutionContext& Context)
+	{
+		TConstArrayView<FRTSSimRootFragment> roots = Context.GetFragmentView<FRTSSimRootFragment>();
+		TConstArrayView<FRTSUnitIDFragment> unitids = Context.GetFragmentView<FRTSUnitIDFragment>();
+		TConstArrayView<FRTSCollisionBoundsFragment> bounds = Context.GetFragmentView<FRTSCollisionBoundsFragment>();
+		TConstArrayView<FMassEntityHandle> entities = Context.GetEntities();
+		TArrayView<FRTSAngularVelocityFragment> velocities = Context.GetMutableFragmentView<FRTSAngularVelocityFragment>();
+		TArrayView<FRTSCurrentLocationFragment> locations = Context.GetMutableFragmentView<FRTSCurrentLocationFragment>();
+		TArrayView<FRTSCurrentRotationFragment> rotations = Context.GetMutableFragmentView<FRTSCurrentRotationFragment>();
+		int32 entcount = Context.GetNumEntities();
+		for (int32 i = 0; i < entcount; i++)
+		{
+			if (velocities[i].AngularVelocity.IsNearlyZero())
+			{
+				continue;
+			}
+			FComplexMovementRotationCommitInfo movecommit(
+				roots[i].SimRoot.Get(), 
+				locations[i], 
+				rotations[i], 
+				velocities[i], 
+				bounds[i], 
+				unitids[i].UnitID, 
+				entities[i]);
+			RotationCommitsThisFrame.Add(movecommit);
+		}
+	});
+
+	RotationCommitsThisFrame.Sort();
+
+	for (int32 i = 0; i < RotationCommitsThisFrame.Num(); i++)
+	{
+		RotationCommitsThisFrame[i].Rotation.Rotation += RotationCommitsThisFrame[i].Velocity.AngularVelocity;
+		RotationCommitsThisFrame[i].Rotation.Rotation.Normalize();
+		RotationCommitsThisFrame[i].SimRoot->SetRelativeRotation(RotationCommitsThisFrame[i].Rotation.Rotation);
+	}
 }

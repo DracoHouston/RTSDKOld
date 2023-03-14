@@ -10,15 +10,22 @@
 #include "RTSDKGameSimSubsystem.generated.h"
 
 class URTSDKUnitComponent;
-
+class ARTSDKPlayerState;
+class URTSDKPlayerCommandBase;
+struct FRTSDKPlayerCommandReplicationInfo;
 
 
 USTRUCT(BlueprintType)
-struct RTSDK_API FRTSCommandInputInfo
+struct RTSDK_API FRTSDKRegisteredPlayerInfo
 {
 public:
 	GENERATED_BODY()
 
+		UPROPERTY()
+		int32 PlayerID;
+
+		UPROPERTY()
+		TWeakObjectPtr<ARTSDKPlayerState> PlayerState;
 };
 
 USTRUCT(BlueprintType)
@@ -55,6 +62,11 @@ public:
 		return bSimIsRunning;
 	}
 
+	bool IsSimPaused()
+	{
+		return bSimIsPaused;
+	}
+
 	int32 GetFrameCount() const
 	{
 		return FrameCount;
@@ -68,42 +80,71 @@ public:
 	void ResetFrameCount()
 	{
 		SetFrameCount(0);
+		LastLockstepTurnFrame = FrameCount;
 	}
 
 	void AdvanceFrame();
 
-	bool ShouldAdvanceFrame() const
+	bool ShouldAdvanceFrame() const;
+
+	int32 GetFramesPerLockstepTurn() const
 	{
-		UWorld* world = GetWorld();
-		if (world == nullptr)
-		{
-			return false;
-		}
-		FRTSNumber64 timeovertimestep = FRTSMath::FloorToDouble((FRTSNumber64)world->TimeSeconds / TimeStep);
-		return timeovertimestep > (FRTSNumber64)FrameCount;
+		return FramesPerLockstepTurn;
+	}
+	//todo, networked dilation + local dilation, scaling thisby networked dilation
+	void SetFramesPerLockstepTurn(int32 inFrameCount)
+	{
+		FramesPerLockstepTurn = inFrameCount;
 	}
 
-	int32 GetFrameDelay() const
+	int32 GetCurrentInputTurn() const
 	{
-		return FrameDelay;
+		return CurrentInputTurn;
 	}
 
-	void SetFrameDelay(int32 inFrameCount)
+	void SetCurrentInputTurn(int32 inTurnCount)
 	{
-		FrameDelay = inFrameCount;
-	}
+		CurrentInputTurn = inTurnCount;
+	}	
 
 	FRTSNumber64 GetTimestep() const
 	{
 		return TimeStep;
 	}
-
-	void SetTimestep(FRTSNumber64 inTimeStep)
+	
+	int32 GetTargetUPS()
 	{
-		TargetUPS = inTimeStep;
-		TimeStep = FRTSNumber64::Make(1.0) / inTimeStep;
+		return TargetUPS;
 	}
 
+	void SetTargetUPS(int32 inTargetUPS)
+	{
+		TargetUPS = inTargetUPS;
+		TimeStep = TargetUPS > 0 ? FRTSNumber64::Make(1.0) / (FRTSNumber64)TargetUPS : FRTSNumber64::Make(0.0);
+		SetGravityAcceleration(GravityAccelerationMeters);
+		SetTerminalVelocity(TerminalVelocityMeters);
+	}
+
+	int32 GetMaxFramesPerTick() const
+	{
+		return MaxFramesPerTick;
+	}
+
+	void SetMaxFramesPerTick(int32 inFramesPerTick)
+	{
+		MaxFramesPerTick = inFramesPerTick;
+	}
+
+	FRTSNumber64 GetTimeScale() const
+	{
+		return TimeScale;
+	}
+
+	void SetTimeScale(FRTSNumber64 inTimeScale)
+	{
+		TimeScale = inTimeScale;
+	}
+	
 	FRTSNumber64 GetMetersToUUScale() const
 	{
 		return MetersToUUScale;
@@ -112,6 +153,8 @@ public:
 	void SetMetersToUUScale(FRTSNumber64 inMetersToUUScale)
 	{
 		MetersToUUScale = inMetersToUUScale;
+		SetGravityAcceleration(GravityAccelerationMeters);
+		SetTerminalVelocity(TerminalVelocityMeters);
 	}
 
 	FRTSNumber64 GetGravityAcceleration() const
@@ -121,7 +164,8 @@ public:
 
 	void SetGravityAcceleration(FRTSNumber64 inGravityAcceleration)
 	{
-		GravityAcceleration = (inGravityAcceleration * MetersToUUScale) * TimeStep;
+		GravityAccelerationMeters = inGravityAcceleration;
+		GravityAcceleration = (GravityAccelerationMeters * MetersToUUScale) * TimeStep;
 		GravityVector = GravityAcceleration > FRTSNumber64::Make(0.0) ? GravityDirection * GravityAcceleration : FRTSVector64::ZeroVector;
 	}
 
@@ -132,7 +176,8 @@ public:
 
 	void SetTerminalVelocity(FRTSNumber64 inTerminalVelocity)
 	{
-		TerminalVelocity = (inTerminalVelocity * MetersToUUScale) * TimeStep;
+		TerminalVelocityMeters = inTerminalVelocity;
+		TerminalVelocity = (TerminalVelocityMeters * MetersToUUScale) * TimeStep;
 	}
 
 	FRTSVector64 GetGravityDirection() const
@@ -151,29 +196,10 @@ public:
 		GravityVector = GravityAcceleration > FRTSNumber64::Make(0.0) ? GravityDirection * GravityAcceleration : FRTSVector64::ZeroVector;
 	}
 
-	TArray<FRTSCommandInputInfo> GetCurrentCommandInputs() const
-	{
-		return GetCommandInputsByFrame(FrameCount);
-	}
+	TArray<TObjectPtr<URTSDKPlayerCommandBase>> GetPlayerCommandsByTurn(int32 inFrame) const;
 
-	TArray<FRTSCommandInputInfo> GetCommandInputsByFrame(int32 inFrame) const
-	{
-		const TArray<FRTSCommandInputInfo>* retval = nullptr;
-		retval = CommandInputsByFrame.Find(inFrame);
-		return *retval;
-	}
-
-	void AddCommandInputByFrame(const FRTSCommandInputInfo& inCommandInput, int32 inFrame)
-	{
-		TArray<FRTSCommandInputInfo>& frameinputs = CommandInputsByFrame.FindOrAdd(inFrame);
-		frameinputs.Add(inCommandInput);
-	}
-
-	void EnqueueCommandInput(const FRTSCommandInputInfo& inCommandInput)
-	{
-		AddCommandInputByFrame(inCommandInput, FrameCount + FrameDelay);
-	}
-	
+	void AddPlayerCommands(APlayerState* inPlayer, const TArray<FRTSDKPlayerCommandReplicationInfo>& inCommandInput);
+		
 	int64 RegisterUnit(AActor* inUnitActor, URTSDKUnitComponent* inUnitComponent, FMassEntityHandle inUnitHandle);
 
 	bool DoesUnitExist(int64 TargetID) const
@@ -205,30 +231,55 @@ public:
 
 protected:
 	bool bSimIsRunning;
+	bool bSimIsPaused;
 	bool bInScriptCallingMode;
 	int32 FrameCount;
 	int32 TargetUPS;
+	int32 MaxFramesPerTick;
 	FRTSNumber64 TimeStep;
+	FRTSNumber64 TimeScale;
+	FRTSNumber64 LastRealTimeSeconds;
+	FRTSNumber64 TotalPauseDuration;
+	FRTSNumber64 PausedTimeSeconds;
+	FRTSNumber64 PausedDilatedTimeSeconds;
+	FRTSNumber64 GameTimeSeconds;
 
 	UPROPERTY(EditAnywhere, Category = Mass)
 	TObjectPtr<UMassCompositeProcessor> SimProcessor = nullptr;
 
 	TSharedPtr<FMassEntityManager> EntityManager;
 
-	int32 FrameDelay;
-	TMap<int32, TArray<FRTSCommandInputInfo>> CommandInputsByFrame;
+	TObjectPtr<AWorldSettings> WorldSettings;
+
+	int32 CurrentInputTurn;
+	int32 LastLockstepTurnFrame;
+	int32 FramesPerLockstepTurn;
+	FRTSNumber64 LockstepTurnTimeStep;
+	TMap<int32, TArray<TObjectPtr<URTSDKPlayerCommandBase>>> PlayerCommandsByTurn;
 	
 	TMap<int64, FRTSDKRegisteredUnitInfo> UnitsByID;
 	TSharedPtr<FMassCommandBuffer> ScriptCommandBuffer;
 
 	//TMap<TSubclassOf<FRTSBatchedSimCommand>, TArray<TWeakPtr<FRTSBatchedSimCommand>>> SimCommands;
 	int64 NextUnitID;
+	int64 NextPlayerID;
 	
 	FRTSNumber64 MetersToUUScale;
 	FRTSNumber64 GravityAcceleration;
+	FRTSNumber64 GravityAccelerationMeters;
 	FRTSNumber64 TerminalVelocity;
+	FRTSNumber64 TerminalVelocityMeters;
 	FRTSVector64 GravityDirection;
 	FRTSVector64 GravityVector;
+
+	void SetTimestep(FRTSNumber64 inTimeStep)
+	{
+		TimeStep = inTimeStep;
+	}
+
+	bool ShouldFinalizeLockstepTurn();
+
+	void FinalizeLockstepTurn();
 
 	TArray<FMassEntityHandle> GetAllUnitEntityHandles()
 	{

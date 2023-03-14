@@ -46,6 +46,7 @@ void URTSDKGravityChangeProcessor::ConfigureQueries()
 	EntityQuery.AddRequirement<FRTSAngularVelocityFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
 	EntityQuery.AddRequirement<FRTSSimRootFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
 	EntityQuery.AddTagRequirement<FRTSComplex3DMovementTag>(EMassFragmentPresence::All);
+	EntityQuery.RegisterWithProcessor(*this);
 }
 
 void URTSDKCurrentToPrevious3DTransformProcessor::ConfigureQueries()
@@ -61,6 +62,7 @@ void URTSDKCurrentToPrevious3DTransformProcessor::ConfigureQueries()
 	MovementQuery.AddRequirement<FRTSAngularVelocityFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
 	MovementQuery.AddRequirement<FRTSSimRootFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
 	MovementQuery.AddRequirement<FRTSVisRootFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
+	MovementQuery.RegisterWithProcessor(*this);
 }
 
 void URTSDKGravityChangeProcessor::SignalEntities(FMassEntityManager& EntityManager, FMassExecutionContext& Context, FMassSignalNameLookup& EntitySignals)

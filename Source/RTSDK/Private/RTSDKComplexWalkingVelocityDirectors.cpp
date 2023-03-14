@@ -30,19 +30,12 @@ void URTSDKComplexWalkingBasedVelocityDirector::ConfigureQueries()
 	MovementQuery.AddRequirement<FRTSUnitIDFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
 	MovementQuery.AddRequirement<FRTSSimRootFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
 	MovementQuery.AddRequirement<FRTSCurrentLocationFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
-	MovementQuery.AddRequirement<FRTSCurrentRotationFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
-	MovementQuery.AddRequirement<FRTSCurrentScaleFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
 	MovementQuery.AddRequirement<FRTSMovementInputFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
-	MovementQuery.AddRequirement<FRTSLookInputFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
 	MovementQuery.AddRequirement<FRTSMaxAccelerationFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
 	MovementQuery.AddRequirement<FRTSMaxDecelerationFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
-	MovementQuery.AddRequirement<FRTSMaxAngularAccelerationFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
-	MovementQuery.AddRequirement<FRTSMaxAngularDecelerationFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
 	MovementQuery.AddRequirement<FRTSMaxVelocityFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
-	MovementQuery.AddRequirement<FRTSCollisionBoundsFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
 	MovementQuery.AddRequirement<FRTSMovementBasisFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
 	MovementQuery.AddRequirement<FRTSVelocityFragment>(EMassFragmentAccess::ReadWrite, EMassFragmentPresence::All);
-	MovementQuery.AddRequirement<FRTSAngularVelocityFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
 	MovementQuery.AddTagRequirement<FRTSComplex3DMovementTag>(EMassFragmentPresence::All);
 	MovementQuery.AddTagRequirement<FRTSWalkingMovementTag>(EMassFragmentPresence::All);
 
@@ -54,19 +47,13 @@ void URTSDKComplexWalkingAirVelocityDirector::ConfigureQueries()
 	MovementQuery.AddRequirement<FRTSUnitIDFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
 	MovementQuery.AddRequirement<FRTSSimRootFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
 	MovementQuery.AddRequirement<FRTSCurrentLocationFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
-	MovementQuery.AddRequirement<FRTSCurrentRotationFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
-	MovementQuery.AddRequirement<FRTSCurrentScaleFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
 	MovementQuery.AddRequirement<FRTSMovementInputFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
-	MovementQuery.AddRequirement<FRTSLookInputFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
 	MovementQuery.AddRequirement<FRTSMaxAccelerationFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
 	MovementQuery.AddRequirement<FRTSMaxDecelerationFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
-	MovementQuery.AddRequirement<FRTSMaxAngularAccelerationFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
-	MovementQuery.AddRequirement<FRTSMaxAngularDecelerationFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
 	MovementQuery.AddRequirement<FRTSMaxVelocityFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
-	MovementQuery.AddRequirement<FRTSCollisionBoundsFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
 	MovementQuery.AddRequirement<FRTSMovementBasisFragment>(EMassFragmentAccess::None, EMassFragmentPresence::None);
 	MovementQuery.AddRequirement<FRTSVelocityFragment>(EMassFragmentAccess::ReadWrite, EMassFragmentPresence::All);
-	MovementQuery.AddRequirement<FRTSAngularVelocityFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
+	MovementQuery.AddRequirement<FRTSAirControlFactorFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
 	MovementQuery.AddTagRequirement<FRTSComplex3DMovementTag>(EMassFragmentPresence::All);
 	MovementQuery.AddTagRequirement<FRTSWalkingMovementTag>(EMassFragmentPresence::All);
 
@@ -77,18 +64,11 @@ void URTSDKComplexWalkingAngularVelocityDirector::ConfigureQueries()
 {
 	MovementQuery.AddRequirement<FRTSUnitIDFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
 	MovementQuery.AddRequirement<FRTSSimRootFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
-	MovementQuery.AddRequirement<FRTSCurrentLocationFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
 	MovementQuery.AddRequirement<FRTSCurrentRotationFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
-	MovementQuery.AddRequirement<FRTSCurrentScaleFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
-	MovementQuery.AddRequirement<FRTSMovementInputFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
 	MovementQuery.AddRequirement<FRTSLookInputFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
-	MovementQuery.AddRequirement<FRTSMaxAccelerationFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
-	MovementQuery.AddRequirement<FRTSMaxDecelerationFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
 	MovementQuery.AddRequirement<FRTSMaxAngularAccelerationFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
 	MovementQuery.AddRequirement<FRTSMaxAngularDecelerationFragment>(EMassFragmentAccess::ReadOnly, EMassFragmentPresence::All);
-	MovementQuery.AddRequirement<FRTSMaxVelocityFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
-	MovementQuery.AddRequirement<FRTSCollisionBoundsFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
-	MovementQuery.AddRequirement<FRTSVelocityFragment>(EMassFragmentAccess::None, EMassFragmentPresence::All);
+	MovementQuery.AddRequirement<FRTSMaxAngularVelocityFragment>(EMassFragmentAccess::ReadWrite, EMassFragmentPresence::All);
 	MovementQuery.AddRequirement<FRTSAngularVelocityFragment>(EMassFragmentAccess::ReadWrite, EMassFragmentPresence::All);
 	MovementQuery.AddTagRequirement<FRTSComplex3DMovementTag>(EMassFragmentPresence::All);
 	MovementQuery.AddTagRequirement<FRTSWalkingMovementTag>(EMassFragmentPresence::All);
@@ -222,20 +202,20 @@ void URTSDKComplexWalkingAngularVelocityDirector::Execute(FMassEntityManager& En
 			FRTSNumber64 testroll = FRTSMath::Abs(velocities[i].AngularVelocity.Roll) - FRTSMath::Abs(accelerations[i].AngularAcceleration.Roll);
 			//if less than or equal 0 (we can stop our current angular velocity) we apply it to get a new one towards goal
 			//if greater than 0 we apply our angular acceleration to current velocity towards 0
-			FRTSQuat64 deltaquat = desiredrot.Quaternion() * rots[i].Rotation.Quaternion().Inverse();
+			//FRTSQuat64 deltaquat = desiredrot.Quaternion() * rots[i].Rotation.Quaternion().Inverse();
 			//deltaquat.Normalize();
-			FRTSRotator64 deltarot = deltaquat.Rotator();
-			/*FRTSNumber64 deltapitch = FRTSMath::FindDeltaAngleDegrees(rots[i].Rotation.Pitch, desiredrot.Pitch);
+			//FRTSRotator64 deltarot = deltaquat.Rotator();
+			FRTSNumber64 deltapitch = FRTSMath::FindDeltaAngleDegrees(rots[i].Rotation.Pitch, desiredrot.Pitch);
 			FRTSNumber64 deltayaw = FRTSMath::FindDeltaAngleDegrees(rots[i].Rotation.Yaw, desiredrot.Yaw);
-			FRTSNumber64 deltaroll = FRTSMath::FindDeltaAngleDegrees(rots[i].Rotation.Roll, desiredrot.Roll);*/
+			FRTSNumber64 deltaroll = FRTSMath::FindDeltaAngleDegrees(rots[i].Rotation.Roll, desiredrot.Roll);
 			testpitch = testpitch <= FRTSNumber64::Make(0.0) ?
-				FRTSMath::Min(FRTSMath::Abs(deltarot.Pitch), accelerations[i].AngularAcceleration.Pitch) * FRTSMath::Sign(deltarot.Pitch) :
+				FRTSMath::Min(FRTSMath::Abs(deltapitch), accelerations[i].AngularAcceleration.Pitch) * FRTSMath::Sign(deltapitch) :
 				FRTSMath::FixedTurn(velocities[i].AngularVelocity.Pitch, FRTSNumber64::Make(0.0), accelerations[i].AngularAcceleration.Pitch);
 			testyaw = testyaw <= FRTSNumber64::Make(0.0) ?
-				FRTSMath::Min(FRTSMath::Abs(deltarot.Yaw), accelerations[i].AngularAcceleration.Yaw) * FRTSMath::Sign(deltarot.Yaw) :
+				FRTSMath::Min(FRTSMath::Abs(deltayaw), accelerations[i].AngularAcceleration.Yaw) * FRTSMath::Sign(deltayaw) :
 				FRTSMath::FixedTurn(velocities[i].AngularVelocity.Yaw, FRTSNumber64::Make(0.0), accelerations[i].AngularAcceleration.Yaw);
 			testroll = testroll <= FRTSNumber64::Make(0.0) ?
-				FRTSMath::Min(FRTSMath::Abs(deltarot.Roll), accelerations[i].AngularAcceleration.Roll) * FRTSMath::Sign(deltarot.Roll) :
+				FRTSMath::Min(FRTSMath::Abs(deltaroll), accelerations[i].AngularAcceleration.Roll) * FRTSMath::Sign(deltaroll) :
 				FRTSMath::FixedTurn(velocities[i].AngularVelocity.Roll, FRTSNumber64::Make(0.0), accelerations[i].AngularAcceleration.Roll);
 
 			velocities[i].AngularVelocity = FRTSRotator64(testpitch, testyaw, testroll);

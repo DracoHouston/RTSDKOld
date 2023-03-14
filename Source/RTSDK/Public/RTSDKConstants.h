@@ -32,6 +32,7 @@ using FRTSTransform64 = FFixedTransform64;
 namespace RTSDK
 {
 	const FName SimProcessingPhaseName = FName(TEXT("RTSDKGameSim"));
+	const FName FallingUnitComponentTag = FName(TEXT("FallingUnitComponentTag"));
 }
 
 //Constants for processor group names, for execution order.

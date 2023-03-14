@@ -14,6 +14,7 @@ public class RTSDK : ModuleRules
 			new string[]
 			{
 				"Core",
+                "NetCore",
                 "Chaos",
                 "MassEntity",
 				"MassActors",
