@@ -6,10 +6,19 @@
 #include "FixedPointTypes.h"
 #include "RTSDKPlayerCommand.generated.h"
 
+class ARTSDKCommanderStateBase;
+class ARTSDKSimStateBase;
+class ARTSDKTeamStateBase;
+class ARTSDKForceStateBase;
+class URTSDKGameSimSubsystem;
+
 USTRUCT()
 struct RTSDK_API FRTSDKPlayerCommandReplicationInfo
 {
 	GENERATED_BODY()
+
+		UPROPERTY()
+		TArray<int64> UnitIDs;
 
 		UPROPERTY()
 		TSubclassOf<URTSDKPlayerCommandBase> Class;
@@ -46,19 +55,33 @@ class RTSDK_API URTSDKPlayerCommandBase : public UObject
 public:
 	virtual void Execute() {}
 
-	void SetAll(APlayerState* inPlayer, const FRTSDKPlayerCommandReplicationInfo& Info)
-	{
-		TargetLocations = Info.TargetLocations;
-		TargetRotations = Info.TargetRotations;
-		TargetUnitIDs = Info.TargetUnitIDs;
-		TargetUnitTypes = Info.TargetUnitTypes;
-		Player = inPlayer;
-	}
+	void SetAll(ARTSDKCommanderStateBase* inCommander, URTSDKGameSimSubsystem* inSimSubsystem, const FRTSDKPlayerCommandReplicationInfo& Info);	
 
 protected:
-	TWeakObjectPtr<APlayerState> Player;
+	TWeakObjectPtr<ARTSDKCommanderStateBase> Commander;
+	TWeakObjectPtr<ARTSDKTeamStateBase> Team;
+	TWeakObjectPtr<ARTSDKForceStateBase> Force;
+	TWeakObjectPtr<ARTSDKSimStateBase> SimState;
+	TWeakObjectPtr<URTSDKGameSimSubsystem> SimSubsystem;
+	TArray<int64> UnitIDs;
 	TArray<FFixedVector64> TargetLocations;
 	TArray<FFixedRotator64> TargetRotations;
 	TArray<int64> TargetUnitIDs;
 	TArray<FName> TargetUnitTypes;
+};
+
+UCLASS()
+class RTSDK_API URTSDKPausePlayerCommand : public URTSDKPlayerCommandBase
+{
+	GENERATED_BODY()
+public:
+	virtual void Execute() override;
+};
+
+UCLASS()
+class RTSDK_API URTSDKUnpausePlayerCommand : public URTSDKPlayerCommandBase
+{
+	GENERATED_BODY()
+public:
+	virtual void Execute() override;
 };

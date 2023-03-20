@@ -5,23 +5,72 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Info.h"
 #include "RTSDKPlayerCommand.h"
+#include "RTSDKLaunchOptionsHelpers.h"
 #include "RTSDKSimState.generated.h"
 
+class ARTSDKPlayerController;
 class ARTSDKCommanderStateBase;
 class ARTSDKForceStateBase;
 class ARTSDKTeamStateBase;
 class URTSDKGameSimSubsystem;
 
+UENUM()
+enum class ERTSDKShouldAdvanceInputTurnResult : uint8
+{
+	Skip,
+	Advance,
+	Wait
+};
+
+UENUM()
+enum class ERTSDKPreMatchTickResult : uint8
+{
+	Waiting,
+	Ready
+};
+
+struct FRTSDKLockstepPauseCommands;
+
 USTRUCT()
-struct RTSDK_API FRTSDKStateSetupInfo
+struct RTSDK_API FRTSDKLockstepPauseCommand : public FFastArraySerializerItem
 {
 	GENERATED_BODY()
-public:
-	UPROPERTY()
-	TMap<FString, FString> OptionsMap;
 
-	FRTSDKStateSetupInfo() {}
-	FRTSDKStateSetupInfo(TMap<FString, FString>& inOptions) : OptionsMap(inOptions) {}
+	UPROPERTY()
+	int32 Turn;
+
+	void PreReplicatedRemove(const FRTSDKLockstepPauseCommands& InArraySerializer);
+	void PostReplicatedAdd(const FRTSDKLockstepPauseCommands& InArraySerializer);
+	void PostReplicatedChange(const FRTSDKLockstepPauseCommands& InArraySerializer);
+
+};
+
+USTRUCT()
+struct RTSDK_API FRTSDKLockstepPauseCommands : public FFastArraySerializer
+{
+	GENERATED_BODY()
+
+	void AddPauseCommand(int32 inTurn);
+
+	bool HasPauseCommandOnTurn(int32 inTurn);
+
+	UPROPERTY()
+		TArray<FRTSDKLockstepPauseCommand> PauseCommands;
+
+	bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
+	{
+		return FFastArraySerializer::FastArrayDeltaSerialize<FRTSDKLockstepPauseCommand, FRTSDKLockstepPauseCommands>(PauseCommands, DeltaParms, *this);
+	}
+};
+
+/** Specified to allow fast TArray replication */
+template<>
+struct TStructOpsTypeTraits<FRTSDKLockstepPauseCommands> : public TStructOpsTypeTraitsBase2<FRTSDKLockstepPauseCommands>
+{
+	enum
+	{
+		WithNetDeltaSerializer = true,
+	};
 };
 
 /**
@@ -41,13 +90,40 @@ public:
 	virtual void Setup(URTSDKGameSimSubsystem* inSimSubsystem, UWorld* inWorld);
 
 	UFUNCTION()
-		virtual void SetupTeams(TMap<int32, FRTSDKStateSetupInfo>& OptionsMap) {}
+		virtual void SetupTeams(const TMap<int32,FRTSDKStateSetupInfo>& inOptionsMap) {}
 
 	UFUNCTION()
-		virtual void SetupForces(TMap<int32, FRTSDKStateSetupInfo>& OptionsMap) {}
+		virtual void SetupForces(const TMap<int32, FRTSDKStateSetupInfo>& inOptionsMap) {}
 
 	UFUNCTION()
-		virtual void SetupCommanders(TMap<int32, FRTSDKStateSetupInfo>& OptionsMap) {}
+		virtual void SetupCommanders(const TMap<int32, FRTSDKStateSetupInfo>& inOptionsMap) {}
+
+	UFUNCTION()
+		virtual ERTSDKPreMatchTickResult PreMatchTick();
+
+	UFUNCTION()
+		virtual void SetMatchHasStarted(bool inMatchHasStarted) {}
+
+	UFUNCTION()
+		virtual bool GetMatchHasStarted() { return false; }
+
+	UFUNCTION()
+		virtual void SetMatchIsPaused(bool inMatchIsPaused) {}
+
+	UFUNCTION()
+		virtual bool GetMatchIsPaused() { return false; }
+
+	UFUNCTION()
+		virtual void RequestPause(AController* inController) {}
+
+	UFUNCTION()
+		virtual void RequestUnpause(AController* inController) {}
+
+	UFUNCTION()
+		virtual ERTSDKShouldAdvanceInputTurnResult ShouldAdvanceInputTurn() { return ERTSDKShouldAdvanceInputTurnResult::Skip; }
+
+	UFUNCTION()
+		virtual void OnPreAdvanceInputTurn() {}
 
 	UFUNCTION()
 	virtual ARTSDKCommanderStateBase* GetCommander(const int32& inCommanderID) { return nullptr; }
@@ -100,6 +176,8 @@ public:
 		return TArray<FRTSDKPlayerCommandReplicationInfo>(); 
 	}
 
+	virtual void BeginPlay() override;
+
 protected:
 
 	UPROPERTY(Transient)
@@ -107,6 +185,15 @@ protected:
 
 	UPROPERTY(Transient)
 		FString OptionsString;
+
+	UPROPERTY(Transient)
+		TMap<FString, FString> OptionsMap;
+
+	UPROPERTY(Transient)
+		TObjectPtr<ARTSDKCommanderStateBase> LocalCommander;
+
+	UPROPERTY(Transient)
+		TObjectPtr<APlayerController> LocalPlayerController;
 };
 
 /**
@@ -123,9 +210,18 @@ public:
 	ARTSDKSimStateSPOnly(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 	//RTSDKSimState interface
-	virtual void SetupTeams(TMap<int32, FRTSDKStateSetupInfo>& OptionsMap) override;
-	virtual void SetupForces(TMap<int32, FRTSDKStateSetupInfo>& OptionsMap) override;
-	virtual void SetupCommanders(TMap<int32, FRTSDKStateSetupInfo>& OptionsMap) override;
+	virtual void SetupTeams(const TMap<int32, FRTSDKStateSetupInfo>& inOptionsMap) override;
+	virtual void SetupForces(const TMap<int32, FRTSDKStateSetupInfo>& inOptionsMap) override;
+	virtual void SetupCommanders(const TMap<int32, FRTSDKStateSetupInfo>& inOptionsMap) override;
+	virtual ERTSDKPreMatchTickResult PreMatchTick() override; 
+	virtual void SetMatchHasStarted(bool inMatchHasStarted) override;
+	virtual bool GetMatchHasStarted() override;
+	virtual void SetMatchIsPaused(bool inMatchIsPaused) override;
+	virtual bool GetMatchIsPaused() override;
+	virtual void RequestPause(AController* inController) override;
+	virtual void RequestUnpause(AController* inController) override;
+	virtual ERTSDKShouldAdvanceInputTurnResult ShouldAdvanceInputTurn() override;
+	virtual void OnPreAdvanceInputTurn() override;
 	virtual ARTSDKCommanderStateBase* GetCommander(const int32& inCommanderID) override;
 	virtual TArray<ARTSDKCommanderStateBase*> GetCommanders() override;
 	virtual int32 AddCommander(ARTSDKCommanderStateBase* inCommanderState) override;
@@ -154,6 +250,12 @@ protected:
 
 	UPROPERTY(Transient)
 		TArray<TObjectPtr<ARTSDKTeamStateBase>> Teams;
+
+	UPROPERTY(Transient)
+		bool bMatchHasStarted;
+
+	UPROPERTY(Transient)
+		bool bMatchIsPaused;
 };
 
 /**
@@ -173,9 +275,19 @@ public:
 	ARTSDKSimStateServerClientLockstep(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 	//RTSDKSimState interface
-	virtual void SetupTeams(TMap<int32, FRTSDKStateSetupInfo>& OptionsMap) override;
-	virtual void SetupForces(TMap<int32, FRTSDKStateSetupInfo>& OptionsMap) override;
-	virtual void SetupCommanders(TMap<int32, FRTSDKStateSetupInfo>& OptionsMap) override;
+	virtual void Setup(URTSDKGameSimSubsystem* inSimSubsystem, UWorld* inWorld) override;
+	virtual void SetupTeams(const TMap<int32, FRTSDKStateSetupInfo>& inOptionsMap) override;
+	virtual void SetupForces(const TMap<int32, FRTSDKStateSetupInfo>& inOptionsMap) override;
+	virtual void SetupCommanders(const TMap<int32, FRTSDKStateSetupInfo>& inOptionsMap) override;
+	virtual ERTSDKPreMatchTickResult PreMatchTick() override;
+	virtual void SetMatchHasStarted(bool inMatchHasStarted) override;
+	virtual bool GetMatchHasStarted() override;
+	virtual void SetMatchIsPaused(bool inMatchIsPaused) override;
+	virtual bool GetMatchIsPaused() override;
+	virtual void RequestPause(AController* inController) override;
+	virtual void RequestUnpause(AController* inController) override;
+	virtual ERTSDKShouldAdvanceInputTurnResult ShouldAdvanceInputTurn() override;
+	virtual void OnPreAdvanceInputTurn() override;
 	virtual ARTSDKCommanderStateBase* GetCommander(const int32& inCommanderID) override;
 	virtual TArray<ARTSDKCommanderStateBase*> GetCommanders() override;
 	virtual int32 AddCommander(ARTSDKCommanderStateBase* inCommanderState) override;
@@ -194,7 +306,30 @@ public:
 	virtual TArray<FRTSDKPlayerCommandReplicationInfo> GetCommandsForCommanderByTurn(const int32& inCommanderID, const int32& inTurn) override;
 	//~RTSDKSimState interface
 
+	UFUNCTION()
+		virtual bool PlayerMayRequestPause(AController* inController, ARTSDKCommanderStateBase*& outCommander);
+
+	UFUNCTION()
+		virtual bool PlayerMayRequestUnpause(AController* inController, ARTSDKCommanderStateBase*& outCommander);
+
+	UFUNCTION(NetMulticast, Reliable)
+		void Multicast_OnUnpauseMatch();
+
 protected:
+
+	int32 CalculateFramesPerTurn();
+
+	UPROPERTY(Transient)
+	int32 LastTurnFrame;
+
+	UPROPERTY(Transient, Replicated)
+	int32 FramesPerTurn;
+
+	UPROPERTY(Transient, Replicated)
+		int32 LockstepTimeoutTurnCount;
+
+	UPROPERTY(Transient, Replicated)
+	FFixed64 MinTurnDuration;
 
 	UPROPERTY(Transient, Replicated)
 		TArray<TObjectPtr<ARTSDKCommanderStateBase>> Commanders;
@@ -204,6 +339,19 @@ protected:
 
 	UPROPERTY(Transient, Replicated)
 		TArray<TObjectPtr<ARTSDKTeamStateBase>> Teams;
+
+	UPROPERTY(Transient, Replicated)
+		bool bMatchHasStarted;
+
+	//happens on commands executing in lockstep, so not replicated.
+	UPROPERTY(Transient)
+		bool bMatchIsPaused;
+
+	UPROPERTY(Transient, Replicated)
+		TArray<TObjectPtr<ARTSDKCommanderStateBase>> Pausers;
+
+	UPROPERTY(Transient, Replicated)
+		FRTSDKLockstepPauseCommands PauseCommands;
 };
 
 /**
@@ -226,9 +374,17 @@ public:
 	ARTSDKSimStateServerClientCurves(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 	//RTSDKSimState interface
-	virtual void SetupTeams(TMap<int32, FRTSDKStateSetupInfo>& OptionsMap) override;
-	virtual void SetupForces(TMap<int32, FRTSDKStateSetupInfo>& OptionsMap) override;
-	virtual void SetupCommanders(TMap<int32, FRTSDKStateSetupInfo>& OptionsMap) override;
+	virtual void SetupTeams(const TMap<int32, FRTSDKStateSetupInfo>& inOptionsMap) override;
+	virtual void SetupForces(const TMap<int32, FRTSDKStateSetupInfo>& inOptionsMap) override;
+	virtual void SetupCommanders(const TMap<int32, FRTSDKStateSetupInfo>& inOptionsMap) override;
+	virtual void SetMatchHasStarted(bool inMatchHasStarted) override;
+	virtual bool GetMatchHasStarted() override;
+	virtual void SetMatchIsPaused(bool inMatchIsPaused) override;
+	virtual bool GetMatchIsPaused() override;
+	virtual void RequestPause(AController* inController) override;
+	virtual void RequestUnpause(AController* inController) override;
+	virtual ERTSDKShouldAdvanceInputTurnResult ShouldAdvanceInputTurn() override;
+	virtual void OnPreAdvanceInputTurn() override;
 	virtual ARTSDKCommanderStateBase* GetCommander(const int32& inCommanderID) override;
 	virtual TArray<ARTSDKCommanderStateBase*> GetCommanders() override;
 	virtual int32 AddCommander(ARTSDKCommanderStateBase* inCommanderState) override;
@@ -257,4 +413,14 @@ protected:
 
 	UPROPERTY(Transient, Replicated)
 		TArray<TObjectPtr<ARTSDKTeamStateBase>> Teams;
+
+	UPROPERTY(Transient, Replicated)
+		bool bMatchHasStarted;
+
+	//This class has the only replicated match is paused flag, set only by the server.
+	UPROPERTY(Transient, Replicated)
+		bool bMatchIsPaused;
+
+	UPROPERTY(Transient, Replicated)
+		TArray<TObjectPtr<ARTSDKCommanderStateBase>> Pausers;
 };

@@ -3,6 +3,7 @@
 
 #include "RTSDKGameSimSubsystem.h"
 #include "RTSDKMassModuleSettings.h"
+#include "RTSDKDeveloperSettings.h"
 #include "MassExecutor.h"
 #include "MassEntitySubsystem.h"
 #include "MassSignalSubsystem.h"
@@ -22,14 +23,7 @@ void URTSDKGameSimSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	ResetFrameCount();
 	ResetUnits();
 	//SetFrameDelay(1);
-	SetTimeScale(1.0);
-	SetMaxFramesPerTick(20);
-	SetTargetUPS(32);
-	SetFramesPerLockstepTurn(TargetUPS / 4);
-	SetMetersToUUScale(100.0);
-	SetGravityDirection(FVector::DownVector);
-	SetGravityAcceleration(9.8);
-	SetTerminalVelocity(40.0);
+	
 	Super::Initialize(Collection);
 }
 
@@ -59,15 +53,25 @@ void URTSDKGameSimSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	SimProcessor->SetGroupName(FName(FString::Printf(TEXT("%s Group"), *Settings->SimProcessingPhaseConfig.PhaseName.ToString())));
 	SimProcessor->Initialize(*this);
 
+	const URTSDKDeveloperSettings* RTSDKSettings = GetDefault<URTSDKDeveloperSettings>();
+	SetTimeScale(1.0);
+	SetMaxFramesPerTick(RTSDKSettings->MaxFramesPerGameThreadTick);
+	SetTargetUPS(RTSDKSettings->TargetSimFramesPerSecond);
+	
+	SetMetersToUUScale(InWorld.GetWorldSettings()->WorldToMeters);
+	SetGravityDirection(FVector::DownVector);
+	SetGravityAcceleration(9.8);
+	SetTerminalVelocity(40.0);
+
 	LastRealTimeSeconds = InWorld.RealTimeSeconds;
 	bSimIsPaused = false;
-	bSimIsRunning = true;
 	if (InWorld.GetNetMode() != NM_Client)
 	{
-		ARTSDKSimStateBase* simstate = InWorld.SpawnActor<ARTSDKSimStateBase>(ARTSDKSimStateServerClientLockstep::StaticClass());
+		ARTSDKSimStateBase* simstate = InWorld.SpawnActor<ARTSDKSimStateBase>(RTSDKSettings->SimStateClass);
 		simstate->Setup(this, &InWorld);
+		SimState = simstate;
+		bSimIsRunning = true;
 	}
-
 }
 
 void URTSDKGameSimSubsystem::Deinitialize()
@@ -91,21 +95,53 @@ void URTSDKGameSimSubsystem::Tick(float DeltaTime)
 	{
 		return;
 	}
+	if (!SimState->GetMatchHasStarted())
+	{
+		ERTSDKPreMatchTickResult prematchresult = SimState->PreMatchTick();
+		if (prematchresult == ERTSDKPreMatchTickResult::Ready)
+		{
+			SimState->SetMatchHasStarted(true);
+		}
+		else
+		{
+			return;
+		}
+	}
 	FRTSNumber64 realtimeseconds = GetWorld()->RealTimeSeconds;
 	FRTSNumber64 deltarealtime = realtimeseconds - LastRealTimeSeconds;
 	if (!bSimIsPaused)
 	{
 		PausedTimeSeconds += deltarealtime;
 		PausedDilatedTimeSeconds += (deltarealtime * TimeScale);
-		if (ShouldFinalizeLockstepTurn())
-		{
-			FinalizeLockstepTurn();
-		}
+		
 		int32 frames = 0;
 		while (ShouldAdvanceFrame() && (frames < MaxFramesPerTick))
 		{
+			ERTSDKShouldAdvanceInputTurnResult advanceturn = SimState->ShouldAdvanceInputTurn();
+			if (advanceturn == ERTSDKShouldAdvanceInputTurnResult::Advance)
+			{
+				FinalizeLockstepTurn();
+			}
+			else if (advanceturn == ERTSDKShouldAdvanceInputTurnResult::Wait)
+			{
+				SetSimIsPaused(true);
+				break;
+			}
 			AdvanceFrame();
 			frames++;
+		}
+	}
+	else
+	{
+		ERTSDKShouldAdvanceInputTurnResult advanceturn = SimState->ShouldAdvanceInputTurn();
+		if (advanceturn == ERTSDKShouldAdvanceInputTurnResult::Advance)
+		{
+			FinalizeLockstepTurn();
+			SetSimIsPaused(false);
+		}
+		else if (advanceturn == ERTSDKShouldAdvanceInputTurnResult::Skip)//unpaused from match pausing
+		{
+			SetSimIsPaused(false);
 		}
 	}
 	
@@ -143,13 +179,13 @@ TArray<TObjectPtr<URTSDKPlayerCommandBase>> URTSDKGameSimSubsystem::GetPlayerCom
 	return *retval;
 }
 
-void URTSDKGameSimSubsystem::AddPlayerCommands(APlayerState* inPlayer, const TArray<FRTSDKPlayerCommandReplicationInfo>& inCommandInputs)
+void URTSDKGameSimSubsystem::AddInputCommands(ARTSDKCommanderStateBase* inCommander, const TArray<FRTSDKPlayerCommandReplicationInfo>& inCommandInputs)
 {
 	TArray<TObjectPtr<URTSDKPlayerCommandBase>>& turncommands = PlayerCommandsByTurn.FindOrAdd(CurrentInputTurn + 1);
 	for (int32 i = 0; i < inCommandInputs.Num(); i++)
 	{
 		URTSDKPlayerCommandBase* command = NewObject<URTSDKPlayerCommandBase>(this, inCommandInputs[i].Class.Get());
-		command->SetAll(inPlayer, inCommandInputs[i]);
+		command->SetAll(inCommander, this, inCommandInputs[i]);
 		turncommands.Add(command);
 	}
 }
@@ -197,20 +233,17 @@ bool URTSDKGameSimSubsystem::ShouldFinalizeLockstepTurn()
 	return false;
 }
 
-struct FLockstepFinalizeInfo
+struct FInputTurnFinalizeInfo
 {
-	APlayerState* player;
+	ARTSDKCommanderStateBase* commander;
 	int32 index; 
 	TArray<FRTSDKPlayerCommandReplicationInfo> commands;
 
-	FLockstepFinalizeInfo(APlayerState* p, int32 i, TArray<FRTSDKPlayerCommandReplicationInfo> c)
-	{
-		player = p;
-		index = i;
-		commands = c;
-	}
+	FInputTurnFinalizeInfo(ARTSDKCommanderStateBase* cmdr, int32 i, TArray<FRTSDKPlayerCommandReplicationInfo> c)
+		: commander(cmdr), index(i), commands(c)
+	{}
 
-	inline bool operator<(const FLockstepFinalizeInfo& Other) const
+	inline bool operator<(const FInputTurnFinalizeInfo& Other) const
 	{
 		return index < Other.index;
 	}
@@ -218,40 +251,19 @@ struct FLockstepFinalizeInfo
 
 void URTSDKGameSimSubsystem::FinalizeLockstepTurn()
 {
-	/*bool isserver = GetWorld()->IsServer();
-	TArray<TObjectPtr<APlayerState>> players = GetWorld()->GetGameState()->PlayerArray;
-	TArray<FLockstepFinalizeInfo> infos;
-	int32 playercount = 0;
-	for (int32 i = 0; i < players.Num(); i++)
+	//flushes all the command buffers
+	SimState->OnPreAdvanceInputTurn();
+	//get the previous turn's commands, queue them for next turn
+	TArray<FInputTurnFinalizeInfo> infos;
+	for (int32 i = 0; i < SimState->GetCommanderCount(); i++)
 	{
-		ARTSDKPlayerState* rtsdkplayer = Cast<ARTSDKPlayerState>(players[i]);
-		if ((rtsdkplayer == nullptr) || (rtsdkplayer->IsSpectator()))
-		{
-			continue;
-		}
-		playercount++;
-		if (isserver)
-		{
-			rtsdkplayer->AddCurrentFrameToFrameData(CurrentInputTurn);
-		}
-		for (int32 t = 0; t < rtsdkplayer->TurnData.Turns.Num(); t++)
-		{
-			if (rtsdkplayer->TurnData.Turns[t].Turn == CurrentInputTurn - 1)
-			{
-				infos.Add(FLockstepFinalizeInfo(rtsdkplayer, rtsdkplayer->PlayerIndex, rtsdkplayer->TurnData.Turns[t].Commands));
-			}
-		}
+		TArray<FRTSDKPlayerCommandReplicationInfo> commands = SimState->GetCommandsForCommanderByTurn(i, CurrentInputTurn - 1);
+		infos.Add(FInputTurnFinalizeInfo(SimState->GetCommander(i), i, commands));
 	}
-	if (infos.Num() != playercount)
+	infos.Sort();
+	for (int32 i = 0; i < infos.Num(); i++)
 	{
-		return;
-	}*/
+		AddInputCommands(infos[i].commander, infos[i].commands);
+	}
 	CurrentInputTurn++;
-	LastLockstepTurnFrame = FrameCount;
-	
-	/*infos.Sort();*/
-	/*for (int32 i = 0; i < infos.Num(); i++)
-	{
-		AddPlayerCommands(infos[i].player, infos[i].commands);
-	}*/
 }

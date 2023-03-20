@@ -12,6 +12,10 @@
 class URTSDKUnitComponent;
 class ARTSDKPlayerState;
 class URTSDKPlayerCommandBase;
+class ARTSDKSimStateBase;
+class ARTSDKCommanderStateBase;
+class ARTSDKTeamStateBase;
+class ARTSDKForceStateBase;
 struct FRTSDKPlayerCommandReplicationInfo;
 
 
@@ -57,6 +61,11 @@ public:
 	virtual TStatId GetStatId() const override;
 	//~End of USubsystem interface
 
+	void SetSimIsRunning(bool inSimIsRunning)
+	{
+		bSimIsRunning = inSimIsRunning;
+	}
+
 	bool IsSimRunning()
 	{
 		return bSimIsRunning;
@@ -65,6 +74,11 @@ public:
 	bool IsSimPaused()
 	{
 		return bSimIsPaused;
+	}
+
+	void SetSimIsPaused(bool inSimIsPaused)
+	{
+		bSimIsPaused = inSimIsPaused;
 	}
 
 	int32 GetFrameCount() const
@@ -198,7 +212,7 @@ public:
 
 	TArray<TObjectPtr<URTSDKPlayerCommandBase>> GetPlayerCommandsByTurn(int32 inFrame) const;
 
-	void AddPlayerCommands(APlayerState* inPlayer, const TArray<FRTSDKPlayerCommandReplicationInfo>& inCommandInput);
+	void AddInputCommands(ARTSDKCommanderStateBase* inCommander, const TArray<FRTSDKPlayerCommandReplicationInfo>& inCommandInputs);
 		
 	int64 RegisterUnit(AActor* inUnitActor, URTSDKUnitComponent* inUnitComponent, FMassEntityHandle inUnitHandle);
 
@@ -227,7 +241,16 @@ public:
 
 	UFUNCTION(BlueprintCallable)
 	void SetGlobalGravityDirection(FVector inDir);
+
+	ARTSDKSimStateBase* GetSimState()
+	{
+		return SimState;
+	}
 	
+	void SetSimState(ARTSDKSimStateBase* inSimState)
+	{
+		SimState = inSimState;
+	}
 
 protected:
 	bool bSimIsRunning;
@@ -250,6 +273,8 @@ protected:
 	TSharedPtr<FMassEntityManager> EntityManager;
 
 	TObjectPtr<AWorldSettings> WorldSettings;
+
+	TObjectPtr<ARTSDKSimStateBase> SimState;
 
 	int32 CurrentInputTurn;
 	int32 LastLockstepTurnFrame;

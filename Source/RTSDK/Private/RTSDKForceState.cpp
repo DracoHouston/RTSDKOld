@@ -6,6 +6,7 @@
 #include "RTSDKTeamState.h"
 #include "RTSDKCommanderState.h"
 #include "RTSDKGameSimSubsystem.h"
+#include "RTSDKLaunchOptionsHelpers.h"
 #include "Net/UnrealNetwork.h"
 
 ARTSDKForceStateBase::ARTSDKForceStateBase(const FObjectInitializer& ObjectInitializer)

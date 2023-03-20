@@ -40,6 +40,8 @@ struct RTSDK_API FRTSDKTurnDataArray : public FFastArraySerializer
 
 	bool GetTurn(int32 inTurn, FRTSDKTurnData& outTurnData);
 
+	bool HasTurn(int32 inTurn);
+
 	UPROPERTY()
 		TArray<FRTSDKTurnData> Turns;
 
@@ -83,9 +85,46 @@ public:
 	UFUNCTION()
 		virtual void SetDisplayName(const FText& inName) {}
 
+	UFUNCTION()
+		virtual bool GetIsPlayer() { return false; }
+
+	UFUNCTION()
+		virtual void SetIsPlayer(bool inIsPlayer) {}
+
+	UFUNCTION()
+		virtual bool GetIsReady() { return false; }
+
+	UFUNCTION()
+		virtual void SetIsReady(bool inIsReady) {}
+
+	UFUNCTION()
+		virtual int32 GetPlayerID() { return -1; }
+
+	UFUNCTION()
+		virtual void SetPlayerID(int32 inPlayerID) {}
+
 	//Get all commands for this commander for a turn as an array of player command infos
 	UFUNCTION()
 	virtual TArray<FRTSDKPlayerCommandReplicationInfo> GetCommandsByTurn(int32 inTurn) { return TArray<FRTSDKPlayerCommandReplicationInfo>();	}
+
+	//Get all commands for this commander for a turn as an array of player command infos
+	UFUNCTION()
+		virtual bool HasTurn(int32 inTurn) { return false; }
+
+	//Set the last completed turn of a commander. 
+	//This is used in multiplayer supporting commander states to record when
+	//participating players have completed a turn, or set of frames.
+	//When one of the commanders falls sufficiently behind this will prevent the
+	//server from advancing sim frame and input turn during a game thread tick.
+	//Singleplayer only and the curves based server authoritative child classes ignore this.
+	UFUNCTION()
+		virtual void SetLastCompletedTurn(int32 inTurn);
+
+	//Get the last completed turn of a commander, usually the last completed turn of
+	//a connected player in a networked game on their machine. Bots, the server authorative
+	//and singleplayer only versions always return the current turn.
+	UFUNCTION()
+		virtual int32 GetLastCompletedTurn();
 
 	//Add a command to the command buffer, as a player command info
 	UFUNCTION()
@@ -120,6 +159,15 @@ protected:
 	//FlushCommandBuffer to commit to turn data.
 	UPROPERTY(Transient)
 	TArray<FRTSDKPlayerCommandReplicationInfo> InputCommandBuffer;
+
+	//Unreplicated counter for the last completed turn of a commander state.
+	//Used by some child classes to indicate how a remote player is progressing
+	//through sim frames and input turns. Generally set via some sort of RPC.
+	//Never valid on singleplayer only and server client curves versions
+	//or on clients in the server client lockstep version, where it is used by the server.
+	//valid on all machines for peer 2 peer lockstep version
+	UPROPERTY(Transient)
+		int32 LastCompletedTurn;
 };
 
 /**
@@ -137,6 +185,15 @@ public:
 
 	virtual FText GetDisplayName() override;
 	virtual void SetDisplayName(const FText& inName) override;
+	virtual bool GetIsPlayer() override;
+	virtual void SetIsPlayer(bool inIsPlayer) override;
+	virtual bool GetIsReady() override;
+	virtual void SetIsReady(bool inIsReady) override;
+	virtual int32 GetPlayerID() override;
+	virtual void SetPlayerID(int32 inPlayerID) override;
+	virtual bool HasTurn(int32 inTurn) override;
+	virtual void SetLastCompletedTurn(int32 inTurn) override {} //we don't use this in sp only
+	virtual int32 GetLastCompletedTurn() override;
 	virtual TArray<FRTSDKPlayerCommandReplicationInfo> GetCommandsByTurn(int32 inTurn) override;
 	virtual void AddCommandToCommandBuffer(FRTSDKPlayerCommandReplicationInfo inCommand) override;
 	virtual void FlushCommandBuffer() override;
@@ -154,6 +211,15 @@ protected:
 
 	UPROPERTY(Transient)
 		FText DisplayName;
+
+	UPROPERTY(Transient)
+		bool bIsPlayer;
+
+	UPROPERTY(Transient)
+		int32 PlayerID;
+
+	UPROPERTY(Transient)
+		int32 bIsReady;
 };
 
 /**
@@ -171,6 +237,13 @@ public:
 
 	virtual FText GetDisplayName() override;
 	virtual void SetDisplayName(const FText& inName) override;
+	virtual bool GetIsPlayer() override;
+	virtual void SetIsPlayer(bool inIsPlayer) override;
+	virtual bool GetIsReady() override;
+	virtual void SetIsReady(bool inIsReady) override;
+	virtual int32 GetPlayerID() override;
+	virtual void SetPlayerID(int32 inPlayerID) override;
+	virtual bool HasTurn(int32 inTurn) override;
 	virtual TArray<FRTSDKPlayerCommandReplicationInfo> GetCommandsByTurn(int32 inTurn) override;
 	virtual void AddCommandToCommandBuffer(FRTSDKPlayerCommandReplicationInfo inCommand) override;
 	virtual void FlushCommandBuffer() override;
@@ -188,6 +261,15 @@ protected:
 
 	UPROPERTY(Transient, Replicated)
 		FText DisplayName;
+
+	UPROPERTY(Transient, Replicated)
+		bool bIsPlayer;
+
+	UPROPERTY(Transient, Replicated)
+		int32 PlayerID;
+
+	UPROPERTY(Transient, Replicated)
+		int32 bIsReady;
 };
 
 /**
@@ -205,6 +287,15 @@ public:
 
 	virtual FText GetDisplayName() override;
 	virtual void SetDisplayName(const FText& inName) override;
+	virtual bool GetIsPlayer() override;
+	virtual void SetIsPlayer(bool inIsPlayer) override;
+	virtual bool GetIsReady() override;
+	virtual void SetIsReady(bool inIsReady) override;
+	virtual int32 GetPlayerID() override;
+	virtual void SetPlayerID(int32 inPlayerID) override;
+	virtual bool HasTurn(int32 inTurn) override;
+	virtual void SetLastCompletedTurn(int32 inTurn) override {} //we don't use this, server's sim frames and input turns waits for no one
+	virtual int32 GetLastCompletedTurn() override;
 	virtual TArray<FRTSDKPlayerCommandReplicationInfo> GetCommandsByTurn(int32 inTurn) override;
 	virtual void AddCommandToCommandBuffer(FRTSDKPlayerCommandReplicationInfo inCommand) override;
 	virtual void FlushCommandBuffer() override;
@@ -222,4 +313,13 @@ protected:
 
 	UPROPERTY(Transient, Replicated)
 		FText DisplayName;
+
+	UPROPERTY(Transient, Replicated)
+		bool bIsPlayer;
+
+	UPROPERTY(Transient, Replicated)
+		int32 PlayerID;
+
+	UPROPERTY(Transient, Replicated)
+		int32 bIsReady;
 };

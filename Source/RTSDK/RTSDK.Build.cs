@@ -16,6 +16,7 @@ public class RTSDK : ModuleRules
 				"Core",
                 "NetCore",
                 "Chaos",
+                "DeveloperSettings",
                 "MassEntity",
 				"MassActors",
 				"MassCommon",
