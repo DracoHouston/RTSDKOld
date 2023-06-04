@@ -7,6 +7,8 @@
 #include "RTSDKForceState.h"
 #include "RTSDKSimState.h"
 #include "RTSDKGameSimSubsystem.h"
+#include "RTSDKFragments.h"
+#include "MassEntityView.h"
 
 void URTSDKPlayerCommandBase::SetAll(ARTSDKCommanderStateBase* inCommander, URTSDKGameSimSubsystem* inSimSubsystem, const FRTSDKPlayerCommandReplicationInfo& Info)
 {
@@ -22,12 +24,16 @@ void URTSDKPlayerCommandBase::SetAll(ARTSDKCommanderStateBase* inCommander, URTS
 	SimState = SimSubsystem->GetSimState();
 }
 
-void URTSDKPausePlayerCommand::Execute()
+void URTSDKPawnMoveInputPlayerCommand::Execute()
 {
-	SimState->SetMatchIsPaused(true);
-}
-
-void URTSDKUnpausePlayerCommand::Execute()
-{
-	SimState->SetMatchIsPaused(false);
+//	const FRTSDKRegisteredUnitInfo* unitinfo = SimSubsystem->GetUnitInfoByID(UnitIDs[0]);
+//	FMassEntityView unitentity(*SimSubsystem->GetEntityManager(), unitinfo->UnitHandle);
+//	FRTSMovementInputFragment& moveinput = unitentity.GetFragmentData<FRTSMovementInputFragment>();
+//#if RTSDK_USE_FIXED_POINT
+//	moveinput.Input = TargetLocations[0];
+//#else
+//	moveinput.Input.X = (double)TargetLocations[0].X;
+//	moveinput.Input.Y = (double)TargetLocations[0].Y;
+//	moveinput.Input.Z = (double)TargetLocations[0].Z;
+//#endif
 }

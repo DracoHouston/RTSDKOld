@@ -5,6 +5,7 @@
 #include "RTSDKTeamState.h"
 #include "RTSDKForceState.h"
 #include "RTSDKSimState.h"
+#include "RTSDKUnitComponent.h"
 #include "RTSDKGameSimSubsystem.h"
 #include "RTSDKLaunchOptionsHelpers.h"
 #include "Net/UnrealNetwork.h"
@@ -51,6 +52,37 @@ bool FRTSDKTurnDataArray::HasTurn(int32 inTurn)
 		{
 			return true;
 		}
+	}
+	return false;
+}
+
+void FRTSDKReplicatedSelectionItem::PreReplicatedRemove(const FRTSDKReplicatedSelectionArray& InArraySerializer)
+{
+}
+
+void FRTSDKReplicatedSelectionItem::PostReplicatedAdd(const FRTSDKReplicatedSelectionArray& InArraySerializer)
+{
+}
+
+void FRTSDKReplicatedSelectionItem::PostReplicatedChange(const FRTSDKReplicatedSelectionArray& InArraySerializer)
+{
+}
+
+void FRTSDKReplicatedSelectionArray::Add(FRTSDKReplicatedSelectionItem inSelectionItem)
+{
+	int32 Idx = Items.Add(inSelectionItem);
+	MarkItemDirty(Items[Idx]);
+
+	// server calls "on rep" also
+	Items[Idx].PostReplicatedAdd(*this);
+}
+
+bool FRTSDKReplicatedSelectionArray::Get(int32 inIndex, FRTSDKReplicatedSelectionItem& outItem)
+{
+	if (inIndex < Items.Num())
+	{
+		outItem = Items[inIndex];
+		return true;
 	}
 	return false;
 }
@@ -103,6 +135,31 @@ void ARTSDKCommanderStateBase::SetLastCompletedTurn(int32 inTurn)
 int32 ARTSDKCommanderStateBase::GetLastCompletedTurn()
 {
 	return LastCompletedTurn;
+}
+
+void ARTSDKCommanderStateBase::SetCurrentSelection(FRTSDKCommanderSelectionInfo inSelectionInfo)
+{
+	CommanderSelection = inSelectionInfo;
+}
+
+void ARTSDKCommanderStateBase::AddUnitsToSelection(const TArray<FRTSDKCommanderSelectionUnit>& inUnits, UClass* inUnitDefClass)
+{
+	CommanderSelection.AddUnits(inUnitDefClass, inUnits);
+}
+
+void ARTSDKCommanderStateBase::AddUnitToSelection(FRTSDKCommanderSelectionUnitWithDefinition inUnit)
+{
+	CommanderSelection.AddUnit(inUnit.UnitDefinition, inUnit.UnitID, inUnit.Unit);
+}
+
+void ARTSDKCommanderStateBase::RemoveUnitsFromSelection(const TArray<FRTSDKCommanderSelectionUnit>& inUnits, UClass* inUnitDefClass)
+{
+	CommanderSelection.RemoveUnits(inUnitDefClass, inUnits);
+}
+
+void ARTSDKCommanderStateBase::RemoveUnitFromSelection(FRTSDKCommanderSelectionUnitWithDefinition inUnit)
+{
+	CommanderSelection.RemoveUnit(inUnit.UnitDefinition, FRTSDKCommanderSelectionUnit(inUnit.UnitID, inUnit.Unit));
 }
 
 ARTSDKCommanderStateSPOnly::ARTSDKCommanderStateSPOnly(const FObjectInitializer& ObjectInitializer)
@@ -293,6 +350,7 @@ void ARTSDKCommanderStateServerClientLockstep::FlushCommandBuffer()
 	turn.Commands = InputCommandBuffer;
 	turn.Turn = SimSubsystem->GetCurrentInputTurn();
 	TurnData.AddTurn(turn);
+	InputCommandBuffer.Empty(8);
 }
 
 ARTSDKTeamStateBase* ARTSDKCommanderStateServerClientLockstep::GetTeam()
@@ -439,4 +497,150 @@ void ARTSDKCommanderStateServerClientCurves::GetLifetimeReplicatedProps(TArray<F
 	DOREPLIFETIME(ARTSDKCommanderStateServerClientCurves, bIsPlayer);
 	DOREPLIFETIME(ARTSDKCommanderStateServerClientCurves, bIsReady);
 	DOREPLIFETIME(ARTSDKCommanderStateServerClientCurves, PlayerID);
+}
+
+void FRTSDKCommanderSelectionInfo::SortSelection()
+{
+	UnitsByType.KeySort(
+		[](const TSubclassOf<URTSDKUnitDefinition>& A, const TSubclassOf<URTSDKUnitDefinition>& B)
+		{
+			return A.Get()->GetClassPathName().ToString() < B.Get()->GetClassPathName().ToString();
+		}
+	);
+	for (auto It = UnitsByType.CreateIterator(); It; ++It)
+	{
+		It->Value.Units.Sort(
+			[](const FRTSDKCommanderSelectionUnit& A, const FRTSDKCommanderSelectionUnit& B)
+			{
+				return A.UnitID < B.UnitID;
+			}
+		);
+	}
+}
+
+void FRTSDKCommanderSelectionInfo::AddUnit(UClass* inDefinition, uint32 inID, URTSDKUnitComponent* inUnit)
+{
+	TArray<FRTSDKCommanderSelectionUnit> units;
+	units.Add(FRTSDKCommanderSelectionUnit(inID, inUnit));
+	AddUnits(inDefinition, units);
+}
+
+void FRTSDKCommanderSelectionInfo::AddUnits(UClass* inDefinition, TArray<FRTSDKCommanderSelectionUnit> inUnits)
+{
+	if (inUnits.Num() == 0)
+	{
+		return;
+	}
+	FRTSDKCommanderSelectionUnits* result = UnitsByType.Find(inDefinition);
+	if (result != nullptr)
+	{
+		for (int32 i = 0; i < inUnits.Num(); i++)
+		{
+			result->Units.AddUnique(inUnits[i]);
+		}
+		result->Units.Sort(
+			[](const FRTSDKCommanderSelectionUnit& A, const FRTSDKCommanderSelectionUnit& B)
+			{
+				return A.UnitID < B.UnitID;
+			}
+		);
+	}
+	else
+	{
+		FRTSDKCommanderSelectionUnits& newtype = UnitsByType.Add(inDefinition);
+		for (int32 i = 0; i < inUnits.Num(); i++)
+		{
+			newtype.Units.Add(inUnits[i]);
+		}
+		newtype.Units.Sort(
+			[](const FRTSDKCommanderSelectionUnit& A, const FRTSDKCommanderSelectionUnit& B)
+			{
+				return A.UnitID < B.UnitID;
+			}
+		);
+		UnitsByType.KeySort(
+			[](const TSubclassOf<URTSDKUnitDefinition>& A, const TSubclassOf<URTSDKUnitDefinition>& B)
+			{
+				return A.Get()->GetClassPathName().ToString() < B.Get()->GetClassPathName().ToString();
+			}
+		);
+	}
+}
+
+void FRTSDKCommanderSelectionInfo::RemoveUnit(UClass* inDefinition, FRTSDKCommanderSelectionUnit inUnit)
+{
+	TArray<FRTSDKCommanderSelectionUnit> units;
+	units.Add(inUnit);
+	RemoveUnits(inDefinition, units);
+}
+
+void FRTSDKCommanderSelectionInfo::RemoveUnits(UClass* inDefinition, TArray<FRTSDKCommanderSelectionUnit> inUnits)
+{
+	FRTSDKCommanderSelectionUnits* result = UnitsByType.Find(inDefinition);
+	if (result != nullptr)
+	{
+		FRTSDKCommanderSelectionUnits& unitsref = *result;
+		for (int32 i = 0; i < unitsref.Units.Num(); i++)
+		{
+			if (inUnits.Contains(unitsref.Units[i]))
+			{
+				unitsref.Units.RemoveAt(i);
+				i--;
+			}
+		}
+		if (unitsref.Units.Num() == 0)
+		{
+			UnitsByType.Remove(inDefinition);
+			UnitsByType.KeySort(
+				[](const TSubclassOf<URTSDKUnitDefinition>& A, const TSubclassOf<URTSDKUnitDefinition>& B)
+				{
+					return A.Get()->GetClassPathName().ToString() < B.Get()->GetClassPathName().ToString();
+				}
+			);
+		}
+	}
+}
+
+void FRTSDKCommanderSelectionInfo::RemoveUnit(URTSDKUnitComponent* inUnit)
+{
+	if (inUnit == nullptr)
+	{
+		return;
+	}
+	TArray<FRTSDKCommanderSelectionUnit> units;
+	units.Add(FRTSDKCommanderSelectionUnit(inUnit->GetUnitID(), inUnit));
+	RemoveUnits(inUnit->UnitDefintion, units);
+}
+
+void FRTSDKCommanderSelectionInfo::ClearSelection()
+{
+	UnitsByType.Empty();
+}
+
+TArray<FRTSDKCommanderSelectionUnit> FRTSDKCommanderSelectionInfo::GetAllUnits() const
+{
+	TArray<FRTSDKCommanderSelectionUnit> retval;
+	for (auto It = UnitsByType.CreateConstIterator(); It; ++It)
+	{
+		retval += It->Value.Units;
+	}
+	return retval;
+}
+
+TArray<FRTSDKCommanderSelectionUnitWithDefinition> FRTSDKCommanderSelectionInfo::GetAllUnitsWithDefinitions() const
+{
+	TArray<FRTSDKCommanderSelectionUnitWithDefinition> retval;
+	for (auto It = UnitsByType.CreateConstIterator(); It; ++It)
+	{
+		for (auto InnerIt = It->Value.Units.CreateConstIterator(); InnerIt; ++InnerIt)
+		{
+			retval.Add(FRTSDKCommanderSelectionUnitWithDefinition(InnerIt->UnitID, InnerIt->Unit, It->Key));
+		}
+	}
+	return retval; 
+}
+
+RTSDK_API bool operator==(const FRTSDKCommanderSelectionUnit& LHS, const FRTSDKCommanderSelectionUnit& RHS)
+{
+	return LHS.UnitID == RHS.UnitID;
 }

@@ -84,5 +84,8 @@ public:
 #if WITH_EDITORONLY_DATA
 	UPROPERTY(EditAnywhere)
 		TArray<FRTSDKPIETeamSetupInfo> PIEMatchSetup;
+
+	UPROPERTY(EditAnywhere)
+		bool PIEMatchIsLAN;
 #endif
 };

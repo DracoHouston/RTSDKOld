@@ -24,6 +24,35 @@ ARTSDKSimStateBase::ARTSDKSimStateBase(const FObjectInitializer& ObjectInitializ
     PrimaryActorTick.bCanEverTick = false;
 }
 
+void ARTSDKSimStateBase::PlayerSetup()
+{
+    APlayerController* epicpc = GetWorld()->GetFirstPlayerController();
+
+    if (epicpc == nullptr)
+    {
+        return;
+    }
+    if (!epicpc->Implements<URTSDKPlayerControllerInterface>())
+    {
+        return;
+    }
+    LocalPlayerController = epicpc;
+}
+
+bool ARTSDKSimStateBase::GetIsPlayerSetup()
+{
+    //there are no local players on dedicated servers to set up.
+    if (GetWorld()->GetNetMode() == ENetMode::NM_DedicatedServer)
+    {
+        return true;
+    }
+    if (LocalPlayerController == nullptr)
+    {
+        return false;
+    }
+    return true;
+}
+
 void ARTSDKSimStateBase::Setup(URTSDKGameSimSubsystem* inSimSubsystem, UWorld* inWorld)
 {
     SimSubsystem = inSimSubsystem;
@@ -36,7 +65,7 @@ void ARTSDKSimStateBase::Setup(URTSDKGameSimSubsystem* inSimSubsystem, UWorld* i
         ARTSDKWorldSettings* ws = Cast<ARTSDKWorldSettings>(inWorld->GetWorldSettings());
         if (ws != nullptr)
         {
-            OptionsString = FRTSDKLaunchOptionsHelpers::GetLaunchOptionsFromPIEMatchSetup(ws->PIEMatchSetup);
+            OptionsString = FRTSDKLaunchOptionsHelpers::GetLaunchOptionsFromPIEMatchSetup(ws->PIEMatchSetup, ws->PIEMatchIsLAN);
         }
     }
 #endif
@@ -55,33 +84,6 @@ void ARTSDKSimStateBase::Setup(URTSDKGameSimSubsystem* inSimSubsystem, UWorld* i
     }
 }
 
-ERTSDKPreMatchTickResult ARTSDKSimStateBase::PreMatchTick()
-{
-    if (GetWorld()->GetNetMode() == ENetMode::NM_DedicatedServer)
-    {
-        return ERTSDKPreMatchTickResult::Ready;
-    }
-    //acquire local player controller
-    if (LocalPlayerController == nullptr)
-    {
-        APlayerController* epicpc = GetWorld()->GetFirstPlayerController();
-       
-        if (epicpc == nullptr)
-        {
-            return ERTSDKPreMatchTickResult::Waiting;
-        }
-        if (epicpc->Implements<URTSDKPlayerControllerInterface>())
-        {
-            LocalPlayerController = epicpc;
-        }
-        else
-        {
-            return ERTSDKPreMatchTickResult::Waiting;
-        }
-    }
-    return ERTSDKPreMatchTickResult::Ready;
-}
-
 void ARTSDKSimStateBase::BeginPlay()
 {
     Super::BeginPlay();
@@ -90,7 +92,7 @@ void ARTSDKSimStateBase::BeginPlay()
     {
         URTSDKGameSimSubsystem* sim = GetWorld()->GetSubsystem<URTSDKGameSimSubsystem>();
         sim->SetSimState(this);
-        sim->SetSimIsRunning(true);
+        sim->SetSimIsInitialized(true);
         SimSubsystem = sim;
     }
 }
@@ -146,37 +148,14 @@ void ARTSDKSimStateSPOnly::SetupCommanders(const TMap<int32, FRTSDKStateSetupInf
     SetCommanders(commanders);
 }
 
-ERTSDKPreMatchTickResult ARTSDKSimStateSPOnly::PreMatchTick()
+void ARTSDKSimStateSPOnly::PreMatchTick()
 {
-    //if there isn't a local player controller yet and it isn't a dedicated server (because this is singleplayer only (but also how do we not have a player controller?))
-    //this call does set the local player controller, though, if not already set.
-    if (Super::PreMatchTick() == ERTSDKPreMatchTickResult::Waiting)
-    {
-        return ERTSDKPreMatchTickResult::Waiting;
-    }
     IRTSDKPlayerControllerInterface* localpc = Cast<IRTSDKPlayerControllerInterface>(LocalPlayerController);
-    //acquire the local player's commander, the first non-bot commander found.
-    if (LocalCommander == nullptr)
+    
+    if (localpc->GetWantsToBeReady())
     {
-        bool foundplayercommander = false;
-        for (int32 i = 0; i < Commanders.Num(); i++)
-        {
-            if (Commanders[i]->GetIsPlayer())
-            {
-                LocalCommander = Commanders[i];
-                localpc->SetCommanderState(LocalCommander);
-                foundplayercommander = true;
-                break;
-            }
-        }
-        if (!foundplayercommander)
-        {
-            //observing a bot on bot skirmish or something weird like that, start if local pc WantsToBeReady.
-            return localpc->GetWantsToBeReady() ? ERTSDKPreMatchTickResult::Ready : ERTSDKPreMatchTickResult::Waiting;
-        }
+        SetMatchHasStarted(true);
     }
-    //ready check
-    return LocalCommander->GetIsReady() ? ERTSDKPreMatchTickResult::Ready : ERTSDKPreMatchTickResult::Waiting;
 }
 
 void ARTSDKSimStateSPOnly::SetMatchHasStarted(bool inMatchHasStarted)
@@ -211,6 +190,15 @@ void ARTSDKSimStateSPOnly::RequestUnpause(AController* inController)
     SetMatchIsPaused(false);
 }
 
+void ARTSDKSimStateSPOnly::RequestTimescale(AController* inController, const FFixed64& inTimescale)
+{
+#if RTSDK_USE_FIXED_POINT
+    SimSubsystem->SetTimeScale(inTimescale);
+#else
+    SimSubsystem->SetTimeScale((double)inTimescale);
+#endif    
+}
+
 ERTSDKShouldAdvanceInputTurnResult ARTSDKSimStateSPOnly::ShouldAdvanceInputTurn()
 {
     //turns happen every frame
@@ -227,11 +215,7 @@ void ARTSDKSimStateSPOnly::OnPreAdvanceInputTurn()
 
 ARTSDKCommanderStateBase* ARTSDKSimStateSPOnly::GetCommander(const int32& inCommanderID)
 {
-    if (inCommanderID < Commanders.Num())
-    {
-        return Commanders[inCommanderID];
-    }
-    return nullptr;
+    return inCommanderID < Commanders.Num() ? Commanders[inCommanderID] : nullptr;
 }
 
 TArray<ARTSDKCommanderStateBase*> ARTSDKSimStateSPOnly::GetCommanders()
@@ -326,6 +310,43 @@ ARTSDKSimStateServerClientLockstep::ARTSDKSimStateServerClientLockstep(const FOb
 {
     bReplicates = true;
     bAlwaysRelevant = true;
+    FramesPerTurn = -1;
+    TurnDuration = -1.0;
+}
+
+bool ARTSDKSimStateServerClientLockstep::GetIsPlayerSetup()
+{
+    bool superresult = Super::GetIsPlayerSetup();
+    if (!superresult)
+    {
+        return false;
+    }
+    //clients need to wait for things to replicate over, this is particularly true of PIE matches, which auto ready-up players
+    if (GetLocalRole() != ENetRole::ROLE_Authority)
+    {
+        for (int32 i = 0; i < Teams.Num(); i++)
+        {
+            if (Teams[i] == nullptr)
+            {
+                return false;
+            }
+        }
+        for (int32 i = 0; i < Forces.Num(); i++)
+        {
+            if (Forces[i] == nullptr)
+            {
+                return false;
+            }
+        }
+        for (int32 i = 0; i < Commanders.Num(); i++)
+        {
+            if (Commanders[i] == nullptr)
+            {
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 void ARTSDKSimStateServerClientLockstep::Setup(URTSDKGameSimSubsystem* inSimSubsystem, UWorld* inWorld)
@@ -336,16 +357,17 @@ void ARTSDKSimStateServerClientLockstep::Setup(URTSDKGameSimSubsystem* inSimSubs
     {
         MinTurnDuration = 0.0;
     }
-    else if (OptionsMap.Contains(TEXT("bIsLanMatch")))
+    else if (OptionsMap.Contains(TEXT("bIsLANMatch")))
     {
-        MinTurnDuration = RTSDKSettings->MinimumNetTurnDuration;
+        MinTurnDuration = RTSDKSettings->MinimumLANTurnDuration;
     }
     else
     {
         MinTurnDuration = RTSDKSettings->MinimumNetTurnDuration;
     }
+    InitialTurnDuration = -1.0;
     LockstepTimeoutTurnCount = RTSDKSettings->LockstepTimeoutTurnCount;
-    FramesPerTurn = CalculateFramesPerTurn();
+    FramesPerTurn = -1;
 }
 
 void ARTSDKSimStateServerClientLockstep::SetupTeams(const TMap<int32, FRTSDKStateSetupInfo>& inOptionsMap)
@@ -393,16 +415,8 @@ void ARTSDKSimStateServerClientLockstep::SetupCommanders(const TMap<int32, FRTSD
     SetCommanders(commanders);
 }
 
-ERTSDKPreMatchTickResult ARTSDKSimStateServerClientLockstep::PreMatchTick()
+void ARTSDKSimStateServerClientLockstep::PreMatchTick()
 {
-    //if there isn't a local player controller yet and it isn't a dedicated server. both unlikely,
-    //but doing this ensures it is set, on anything but dedicated servers, who have no local players
-    if (Super::PreMatchTick() == ERTSDKPreMatchTickResult::Waiting)
-    {
-        return ERTSDKPreMatchTickResult::Waiting;
-    }
-
-    IRTSDKPlayerControllerInterface* localpc = Cast<IRTSDKPlayerControllerInterface>(LocalPlayerController);
     UWorld* world = GetWorld();
     ENetMode netmode = world->GetNetMode();
 #if WITH_EDITORONLY_DATA
@@ -417,10 +431,6 @@ ERTSDKPreMatchTickResult ARTSDKSimStateServerClientLockstep::PreMatchTick()
                 PlayerController->PlayerState->SetPlayerId(i);
                 i++;
             }
-            else
-            {
-                return ERTSDKPreMatchTickResult::Waiting;
-            }
         }
         int32 playercommanders = 0;
         for (int32 c = 0; c < Commanders.Num(); c++)
@@ -429,50 +439,11 @@ ERTSDKPreMatchTickResult ARTSDKSimStateServerClientLockstep::PreMatchTick()
         }
         if (i < playercommanders)
         {
-            return ERTSDKPreMatchTickResult::Waiting;
+            //players aren't all in yet
+            return;
         }
     }
-
 #endif
-
-    //acquire the local player's commander, one with the same PlayerID. but not on dedicated servers, who have no local player.
-    if ((LocalCommander == nullptr) && (netmode != ENetMode::NM_DedicatedServer))
-    {
-        bool foundplayercommander = false;
-        APlayerState* ps = LocalPlayerController->GetPlayerState<APlayerState>();
-        if (ps == nullptr)//not yet replicated
-        {
-            return ERTSDKPreMatchTickResult::Waiting;
-        }
-        for (int32 i = 0; i < Commanders.Num(); i++)
-        {
-            if (Commanders[i] == nullptr)//not yet replicated 
-            {
-                return ERTSDKPreMatchTickResult::Waiting;
-            }
-            if (!Commanders[i]->GetIsPlayer())
-            {
-                continue;
-            }
-            foundplayercommander = true;
-            if (Commanders[i]->GetPlayerID() == ps->GetPlayerId())
-            {
-                LocalCommander = Commanders[i];
-                localpc->SetCommanderState(LocalCommander);
-                break;
-            }
-        }
-        if (!foundplayercommander)
-        {
-            //observing a bot on bot skirmish or something weird like that, start if local pc WantsToBeReady.
-            return localpc->GetWantsToBeReady() ? ERTSDKPreMatchTickResult::Ready : ERTSDKPreMatchTickResult::Waiting;
-        }
-    }
-    //here clients need to just wait for the flag to replicate over to exit pre match
-    if (netmode == ENetMode::NM_Client)
-    {
-        return ERTSDKPreMatchTickResult::Waiting;
-    }
     //if some sort of server, other than standalone, which is singleplayer, we try to set all commanders for players
     if ((netmode == ENetMode::NM_DedicatedServer) || (netmode == ENetMode::NM_ListenServer))
     {
@@ -503,19 +474,32 @@ ERTSDKPreMatchTickResult ARTSDKSimStateServerClientLockstep::PreMatchTick()
             }
         }
     }
-
-    //ready check
-    bool foundunready = false;
-    for (int32 i = 0; i < Commanders.Num(); i++)
+    
+    if (GetLocalRole() == ENetRole::ROLE_Authority)
     {
-        if (!Commanders[i]->GetIsReady())
+        //ready check
+        for (int32 i = 0; i < Commanders.Num(); i++)
         {
-            foundunready = true;
-            break;
+            if (!Commanders[i]->GetIsReady())
+            {
+                return;
+            }
+        }
+
+        InitialTurnDuration = CalculateTurnDuration();
+        TurnDuration = InitialTurnDuration;
+        FramesPerTurn = CalculateFramesPerTurn();
+        SetMatchHasStarted(true);
+    }
+    else
+    {
+        //if we have a valid initial turn duration and turn duration is not valid
+        if ((InitialTurnDuration >= FFixed64::MakeFromRawInt(0)) && (TurnDuration < FFixed64::MakeFromRawInt(0)))
+        {
+            TurnDuration = InitialTurnDuration;
+            FramesPerTurn = CalculateFramesPerTurn();
         }
     }
-
-    return foundunready ? ERTSDKPreMatchTickResult::Waiting : ERTSDKPreMatchTickResult::Ready;
 }
 
 void ARTSDKSimStateServerClientLockstep::SetMatchHasStarted(bool inMatchHasStarted)
@@ -528,34 +512,17 @@ void ARTSDKSimStateServerClientLockstep::SetMatchHasStarted(bool inMatchHasStart
 
 bool ARTSDKSimStateServerClientLockstep::GetMatchHasStarted()
 {
-    //clients need to wait for things to replicate over, this is particularly true of PIE matches, which auto ready-up players
-    if (GetLocalRole() != ENetRole::ROLE_Authority)
+    if (InitialTurnDuration < FFixed64::MakeFromRawInt(0))
     {
-        for (int32 i = 0; i < Teams.Num(); i++)
-        {
-            if (Teams[i] == nullptr)
-            {
-                return false;
-            }
-        }
-        for (int32 i = 0; i < Forces.Num(); i++)
-        {
-            if (Forces[i] == nullptr)
-            {
-                return false;
-            }
-        }
-        for (int32 i = 0; i < Forces.Num(); i++)
-        {
-            if (Commanders[i] == nullptr)
-            {
-                return false;
-            }
-        }
-        if (LocalPlayerController == nullptr)
-        {
-            return false;
-        }
+        return false;
+    }
+    if (TurnDuration < FFixed64::MakeFromRawInt(0))
+    {
+        return false;
+    }
+    if (FramesPerTurn < 0)
+    {
+        return false;
     }
     return bMatchHasStarted;
 }
@@ -572,25 +539,14 @@ bool ARTSDKSimStateServerClientLockstep::GetMatchIsPaused()
 
 void ARTSDKSimStateServerClientLockstep::RequestPause(AController* inController)
 {
-    ARTSDKCommanderStateBase* cmdr = nullptr;
     if (GetLocalRole() == ENetRole::ROLE_Authority)
     {
+        ARTSDKCommanderStateBase* cmdr = nullptr;
         if (PlayerMayRequestPause(inController, cmdr))
         {
-            if (GetMatchIsPaused())
+            if (!Pausers.Contains(cmdr))
             {
-                if (!Pausers.Contains(cmdr))
-                {
-                    Pausers.Add(cmdr);
-                }
-            }
-            else
-            {
-                PauseCommands.AddPauseCommand(SimSubsystem->GetCurrentInputTurn() + 2);
-                if (!Pausers.Contains(cmdr))
-                {
-                    Pausers.Add(cmdr);
-                }
+                Pausers.Add(cmdr);
             }
         }
     }
@@ -598,9 +554,9 @@ void ARTSDKSimStateServerClientLockstep::RequestPause(AController* inController)
 
 void ARTSDKSimStateServerClientLockstep::RequestUnpause(AController* inController)
 {
-    ARTSDKCommanderStateBase* cmdr = nullptr;
     if (GetLocalRole() == ENetRole::ROLE_Authority)
     {
+        ARTSDKCommanderStateBase* cmdr = nullptr;
         if (PlayerMayRequestUnpause(inController, cmdr))
         {
             Pausers.Remove(cmdr);
@@ -609,6 +565,17 @@ void ARTSDKSimStateServerClientLockstep::RequestUnpause(AController* inControlle
                 //unpause everyone
                 Multicast_OnUnpauseMatch();
             }
+        }
+    }
+}
+
+void ARTSDKSimStateServerClientLockstep::RequestTimescale(AController* inController, const FFixed64& inTimescale)
+{
+    if (GetLocalRole() == ENetRole::ROLE_Authority)
+    {
+        if (PlayerMayRequestTimescale(inController, inTimescale))
+        {
+            DesiredTimescale = inTimescale;
         }
     }
 }
@@ -629,11 +596,24 @@ ERTSDKShouldAdvanceInputTurnResult ARTSDKSimStateServerClientLockstep::ShouldAdv
     }
     if ((LastTurnFrame + FramesPerTurn) <= framecount)
     {
+        int32 currentturn = SimSubsystem->GetCurrentInputTurn();
         if (world->GetNetMode() == ENetMode::NM_Client)
         {
+            if (!PauseCommands.HasTurn(currentturn))
+            {
+                return ERTSDKShouldAdvanceInputTurnResult::Wait;
+            }
+            if (!TimescaleCommands.HasTurn(currentturn))
+            {
+                return ERTSDKShouldAdvanceInputTurnResult::Wait;
+            }
+            if (!TurnDurationCommands.HasTurn(currentturn))
+            {
+                return ERTSDKShouldAdvanceInputTurnResult::Wait;
+            }
             for (int32 i = 0; i < Commanders.Num(); i++)
             {
-                if (!Commanders[i]->HasTurn(SimSubsystem->GetCurrentInputTurn()))
+                if (!Commanders[i]->HasTurn(currentturn))
                 {
                     return ERTSDKShouldAdvanceInputTurnResult::Wait;
                 }
@@ -648,7 +628,7 @@ ERTSDKShouldAdvanceInputTurnResult ARTSDKSimStateServerClientLockstep::ShouldAdv
                 {
                     continue;
                 }
-                if (SimSubsystem->GetCurrentInputTurn() - Commanders[i]->GetLastCompletedTurn() >= LockstepTimeoutTurnCount)
+                if (currentturn - Commanders[i]->GetLastCompletedTurn() >= LockstepTimeoutTurnCount)
                 {
                     return ERTSDKShouldAdvanceInputTurnResult::Wait;
                 }
@@ -674,10 +654,14 @@ void ARTSDKSimStateServerClientLockstep::OnPreAdvanceInputTurn()
     int32 currentturn = SimSubsystem->GetCurrentInputTurn();
     //if we have a pause command we execute that now.
     //Turn advancement will return wait until unpaused.
-    if (PauseCommands.HasPauseCommandOnTurn(currentturn))
+   /* if (PauseCommands.HasPauseCommandOnTurn(currentturn))
     {
         SetMatchIsPaused(true);
-    }
+    }*/
+
+    AdvancePauseCommands();
+    AdvanceTimescaleCommands();
+    AdvanceTurnDurationCommands();
 
     if (netmode == ENetMode::NM_DedicatedServer)
     {
@@ -824,30 +808,170 @@ bool ARTSDKSimStateServerClientLockstep::PlayerMayRequestUnpause(AController* in
     return false;
 }
 
+bool ARTSDKSimStateServerClientLockstep::PlayerMayRequestTimescale(AController* inController, const FFixed64& inTimescale)
+{
+    const URTSDKDeveloperSettings* RTSDKSettings = GetDefault<URTSDKDeveloperSettings>();
+    if ((inTimescale >= FFixed64::MakeFromRawInt(0)) && (inTimescale <= RTSDKSettings->MaxTimescale))
+    {
+        //default implementation allows free timescale changes for participants, not spectators, if the timescale is within accepted range (0-max)
+        IRTSDKPlayerControllerInterface* pc = Cast<IRTSDKPlayerControllerInterface>(inController);
+        if (pc != nullptr)
+        {
+            ARTSDKCommanderStateBase* cmdr = pc->GetCommanderState();
+            if (cmdr != nullptr)
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 void ARTSDKSimStateServerClientLockstep::Multicast_OnUnpauseMatch_Implementation()
 {
     SetMatchIsPaused(false);
 }
 
+void ARTSDKSimStateServerClientLockstep::AdvancePauseCommands()
+{
+    if (GetLocalRole() == ENetRole::ROLE_Authority)
+    {
+        if (Pausers.Num() > 0)
+        {
+            PauseCommands.AddPauseCommand(SimSubsystem->GetCurrentInputTurn(), true);
+            SetMatchIsPaused(true);
+        }
+        else
+        {
+            PauseCommands.AddPauseCommand(SimSubsystem->GetCurrentInputTurn(), false);
+        }
+    }
+    else
+    {
+        if (PauseCommands.HasPauseCommandOnTurn(SimSubsystem->GetCurrentInputTurn()))
+        {
+            SetMatchIsPaused(true);
+        }
+    }
+}
+
+void ARTSDKSimStateServerClientLockstep::AdvanceTimescaleCommands()
+{
+    if (GetLocalRole() == ENetRole::ROLE_Authority)
+    {
+        if (DesiredTimescale > FFixed64::MakeFromRawInt(0))
+        {
+            TimescaleCommands.AddTimescaleCommand(SimSubsystem->GetCurrentInputTurn(), DesiredTimescale);
+#if RTSDK_USE_FIXED_POINT
+            SimSubsystem->SetTimeScale(DesiredTimescale);
+#else
+            SimSubsystem->SetTimeScale((double)DesiredTimescale);
+#endif
+
+            DesiredTimescale = -1.0;
+            FramesPerTurn = CalculateFramesPerTurn();
+        }
+        else
+        {
+            TimescaleCommands.AddEmptyTimescaleCommand(SimSubsystem->GetCurrentInputTurn());
+        }
+    }
+    else
+    {
+        FFixed64 timescale;
+        if (TimescaleCommands.HasTimescaleCommandOnTurn(SimSubsystem->GetCurrentInputTurn(), timescale))
+        {
+#if RTSDK_USE_FIXED_POINT
+            SimSubsystem->SetTimeScale(timescale);
+#else
+            SimSubsystem->SetTimeScale((double)timescale);
+#endif
+            FramesPerTurn = CalculateFramesPerTurn();
+        }
+    }
+}
+
+void ARTSDKSimStateServerClientLockstep::AdvanceTurnDurationCommands()
+{
+    if (GetLocalRole() == ENetRole::ROLE_Authority)
+    {
+        const URTSDKDeveloperSettings* RTSDKSettings = GetDefault<URTSDKDeveloperSettings>();
+        FFixed64 newoptimalduration = CalculateTurnDuration();
+
+        if (FFixedPointMath::Abs(newoptimalduration - TurnDuration) > RTSDKSettings->LockstepTurnDurationTolerance)
+        {
+            TurnDurationCommands.AddTurnDurationCommand(SimSubsystem->GetCurrentInputTurn(), newoptimalduration);
+            TurnDuration = newoptimalduration;
+
+            FramesPerTurn = CalculateFramesPerTurn();
+        }
+        else
+        {
+            TurnDurationCommands.AddEmptyTurnDurationCommand(SimSubsystem->GetCurrentInputTurn());
+        }
+    }
+    else
+    {
+        FFixed64 turnduration;
+        if (TurnDurationCommands.HasTurnDurationCommandOnTurn(SimSubsystem->GetCurrentInputTurn(), turnduration))
+        {
+            TurnDuration = turnduration;
+            FramesPerTurn = CalculateFramesPerTurn();
+        }
+    }
+}
+
 int32 ARTSDKSimStateServerClientLockstep::CalculateFramesPerTurn()
 {
     //todo: interop module for deterministic maths, this is starting to get annoying!
-    FFixed64 durationoverscaledtimestep = MinTurnDuration / FFixed64((double)SimSubsystem->GetTimestep() * (double)SimSubsystem->GetTimeScale());
-    return FFixedPointMath::CeilToInt(durationoverscaledtimestep);
+    //FFixed64 durationoverscaledtimestep = TurnDuration / (FFixed64((double)SimSubsystem->GetTimestep()) * FFixed64((double)SimSubsystem->GetTimeScale()));
+    FFixed64 scaleddurationovertimestep = (TurnDuration * FFixed64((double)SimSubsystem->GetTimeScale())) / FFixed64((double)SimSubsystem->GetTimestep());
+    return FFixedPointMath::CeilToInt(scaleddurationovertimestep);
+}
+
+FFixed64 ARTSDKSimStateServerClientLockstep::CalculateTurnDuration()
+{
+    UWorld* world = GetWorld();
+    float highestping = 0.0f;
+    for (FConstPlayerControllerIterator Iterator = world->GetPlayerControllerIterator(); Iterator; ++Iterator)
+    {
+        APlayerController* PlayerController = Iterator->Get();
+        if (PlayerController->PlayerState == nullptr)
+        {
+            continue;
+        }
+        IRTSDKPlayerControllerInterface* pc = Cast<IRTSDKPlayerControllerInterface>(PlayerController);
+        if (pc == nullptr)
+        {
+            continue;
+        }
+        //ignore anyone that isn't a participating player
+        if (pc->GetCommanderState() == nullptr)
+        {
+            continue;
+        }
+        float ping = PlayerController->PlayerState->GetPingInMilliseconds();
+        if (ping > highestping)
+        {
+            highestping = ping;
+        }
+    }
+    return FFixedPointMath::Max(MinTurnDuration, FFixed64(highestping / 1000.0));
 }
 
 void ARTSDKSimStateServerClientLockstep::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-    DOREPLIFETIME(ARTSDKSimStateServerClientLockstep, FramesPerTurn);
-    DOREPLIFETIME(ARTSDKSimStateServerClientLockstep, MinTurnDuration);
+    DOREPLIFETIME(ARTSDKSimStateServerClientLockstep, InitialTurnDuration);
     DOREPLIFETIME(ARTSDKSimStateServerClientLockstep, Commanders);
     DOREPLIFETIME(ARTSDKSimStateServerClientLockstep, Teams);
     DOREPLIFETIME(ARTSDKSimStateServerClientLockstep, Forces);
     DOREPLIFETIME(ARTSDKSimStateServerClientLockstep, bMatchHasStarted);
     DOREPLIFETIME(ARTSDKSimStateServerClientLockstep, PauseCommands);
     DOREPLIFETIME(ARTSDKSimStateServerClientLockstep, Pausers);
+    DOREPLIFETIME(ARTSDKSimStateServerClientLockstep, TimescaleCommands);
+    DOREPLIFETIME(ARTSDKSimStateServerClientLockstep, TurnDurationCommands);
 }
 
 ARTSDKSimStateServerClientCurves::ARTSDKSimStateServerClientCurves(const FObjectInitializer& ObjectInitializer)
@@ -1073,10 +1197,11 @@ void FRTSDKLockstepPauseCommand::PostReplicatedChange(const FRTSDKLockstepPauseC
 {
 }
 
-void FRTSDKLockstepPauseCommands::AddPauseCommand(int32 inTurn)
+void FRTSDKLockstepPauseCommands::AddPauseCommand(int32 inTurn, bool inDoPause)
 {
     FRTSDKLockstepPauseCommand cmd;
     cmd.Turn = inTurn;
+    cmd.bDoPause = inDoPause;
     int32 Idx = PauseCommands.Add(cmd);
     MarkItemDirty(PauseCommands[Idx]);
 
@@ -1088,7 +1213,127 @@ bool FRTSDKLockstepPauseCommands::HasPauseCommandOnTurn(int32 inTurn)
 {
     for (int32 i = 0; i < PauseCommands.Num(); i++)
     {
+        if ((PauseCommands[i].Turn == inTurn) && (PauseCommands[i].bDoPause))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool FRTSDKLockstepPauseCommands::HasTurn(int32 inTurn)
+{
+    for (int32 i = 0; i < PauseCommands.Num(); i++)
+    {
         if (PauseCommands[i].Turn == inTurn)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void FRTSDKLockstepTimescaleCommand::PreReplicatedRemove(const FRTSDKLockstepTimescaleCommands& InArraySerializer)
+{
+}
+
+void FRTSDKLockstepTimescaleCommand::PostReplicatedAdd(const FRTSDKLockstepTimescaleCommands& InArraySerializer)
+{
+}
+
+void FRTSDKLockstepTimescaleCommand::PostReplicatedChange(const FRTSDKLockstepTimescaleCommands& InArraySerializer)
+{
+}
+
+void FRTSDKLockstepTimescaleCommands::AddTimescaleCommand(int32 inTurn, FFixed64 inTimescale)
+{
+    FRTSDKLockstepTimescaleCommand cmd;
+    cmd.Turn = inTurn;
+    cmd.Timescale = inTimescale;
+    int32 Idx = TimescaleCommands.Add(cmd);
+    MarkItemDirty(TimescaleCommands[Idx]);
+
+    // server calls "on rep" also
+    TimescaleCommands[Idx].PostReplicatedAdd(*this);
+}
+
+void FRTSDKLockstepTimescaleCommands::AddEmptyTimescaleCommand(int32 inTurn)
+{
+    AddTimescaleCommand(inTurn, -1.0);
+}
+
+bool FRTSDKLockstepTimescaleCommands::HasTimescaleCommandOnTurn(int32 inTurn, FFixed64& outTimescale)
+{
+    for (int32 i = 0; i < TimescaleCommands.Num(); i++)
+    {
+        if ((TimescaleCommands[i].Turn == inTurn) && (TimescaleCommands[i].Timescale >= FFixed64::MakeFromRawInt(0)))
+        {
+            outTimescale = TimescaleCommands[i].Timescale;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool FRTSDKLockstepTimescaleCommands::HasTurn(int32 inTurn)
+{
+    for (int32 i = 0; i < TimescaleCommands.Num(); i++)
+    {
+        if (TimescaleCommands[i].Turn == inTurn)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void FRTSDKLockstepTurnDurationCommand::PreReplicatedRemove(const FRTSDKLockstepTurnDurationCommands& InArraySerializer)
+{
+}
+
+void FRTSDKLockstepTurnDurationCommand::PostReplicatedAdd(const FRTSDKLockstepTurnDurationCommands& InArraySerializer)
+{
+}
+
+void FRTSDKLockstepTurnDurationCommand::PostReplicatedChange(const FRTSDKLockstepTurnDurationCommands& InArraySerializer)
+{
+}
+
+void FRTSDKLockstepTurnDurationCommands::AddTurnDurationCommand(int32 inTurn, FFixed64 inTurnDuration)
+{
+    FRTSDKLockstepTurnDurationCommand cmd;
+    cmd.Turn = inTurn;
+    cmd.TurnDuration = inTurnDuration;
+    int32 Idx = TurnDurationCommands.Add(cmd);
+    MarkItemDirty(TurnDurationCommands[Idx]);
+
+    // server calls "on rep" also
+    TurnDurationCommands[Idx].PostReplicatedAdd(*this);
+}
+
+void FRTSDKLockstepTurnDurationCommands::AddEmptyTurnDurationCommand(int32 inTurn)
+{
+    AddTurnDurationCommand(inTurn, -1.0);
+}
+
+bool FRTSDKLockstepTurnDurationCommands::HasTurnDurationCommandOnTurn(int32 inTurn, FFixed64& outTurnDuration)
+{
+    for (int32 i = 0; i < TurnDurationCommands.Num(); i++)
+    {
+        if ((TurnDurationCommands[i].Turn == inTurn) && (TurnDurationCommands[i].TurnDuration >= FFixed64::MakeFromRawInt(0)))
+        {
+            outTurnDuration = TurnDurationCommands[i].TurnDuration;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool FRTSDKLockstepTurnDurationCommands::HasTurn(int32 inTurn)
+{
+    for (int32 i = 0; i < TurnDurationCommands.Num(); i++)
+    {
+        if (TurnDurationCommands[i].Turn == inTurn)
         {
             return true;
         }

@@ -11,6 +11,7 @@ class ARTSDKSimStateBase;
 class ARTSDKTeamStateBase;
 class ARTSDKForceStateBase;
 class URTSDKGameSimSubsystem;
+class URTSDKUnitDefinition;
 
 USTRUCT()
 struct RTSDK_API FRTSDKPlayerCommandReplicationInfo
@@ -18,7 +19,7 @@ struct RTSDK_API FRTSDKPlayerCommandReplicationInfo
 	GENERATED_BODY()
 
 		UPROPERTY()
-		TArray<int64> UnitIDs;
+		TArray<uint32> UnitIDs;
 
 		UPROPERTY()
 		TSubclassOf<URTSDKPlayerCommandBase> Class;
@@ -30,10 +31,10 @@ struct RTSDK_API FRTSDKPlayerCommandReplicationInfo
 		TArray<FFixedRotator64> TargetRotations;
 
 	UPROPERTY()
-		TArray<int64> TargetUnitIDs;
+		TArray<uint32> TargetUnitIDs;
 
 	UPROPERTY()
-		TArray<FName> TargetUnitTypes;
+		TArray<TSubclassOf<URTSDKUnitDefinition>> TargetUnitTypes;
 };
 
 /**
@@ -63,23 +64,15 @@ protected:
 	TWeakObjectPtr<ARTSDKForceStateBase> Force;
 	TWeakObjectPtr<ARTSDKSimStateBase> SimState;
 	TWeakObjectPtr<URTSDKGameSimSubsystem> SimSubsystem;
-	TArray<int64> UnitIDs;
+	TArray<uint32> UnitIDs;
 	TArray<FFixedVector64> TargetLocations;
 	TArray<FFixedRotator64> TargetRotations;
-	TArray<int64> TargetUnitIDs;
-	TArray<FName> TargetUnitTypes;
+	TArray<uint32> TargetUnitIDs;
+	TArray<TSubclassOf<URTSDKUnitDefinition>> TargetUnitTypes;
 };
 
 UCLASS()
-class RTSDK_API URTSDKPausePlayerCommand : public URTSDKPlayerCommandBase
-{
-	GENERATED_BODY()
-public:
-	virtual void Execute() override;
-};
-
-UCLASS()
-class RTSDK_API URTSDKUnpausePlayerCommand : public URTSDKPlayerCommandBase
+class RTSDK_API URTSDKPawnMoveInputPlayerCommand : public URTSDKPlayerCommandBase
 {
 	GENERATED_BODY()
 public:

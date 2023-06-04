@@ -43,6 +43,9 @@ public:
 		virtual void RequestUnpause() {}
 
 	UFUNCTION()
+		virtual void RequestTimescale(const FFixed64& inTimescale) {}
+
+	UFUNCTION()
 		virtual ARTSDKCommanderStateBase* GetCommanderState() { return nullptr; }
 
 	UFUNCTION()

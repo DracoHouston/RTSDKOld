@@ -7,10 +7,102 @@
 #include "RTSDKPlayerCommand.h"
 #include "RTSDKCommanderState.generated.h"
 
+class ARTSDKCommanderStateBase;
 class URTSDKGameSimSubsystem;
 class ARTSDKSimStateBase;
 class ARTSDKForceStateBase;
 class ARTSDKTeamStateBase;
+class URTSDKUnitComponent;
+
+USTRUCT(BlueprintType)
+struct RTSDK_API FRTSDKCommanderSelectionUnit
+{
+	GENERATED_BODY()
+
+public:
+
+	UPROPERTY()
+		uint32 UnitID;
+
+	UPROPERTY(BlueprintReadOnly)
+		TObjectPtr<URTSDKUnitComponent> Unit;
+
+	FRTSDKCommanderSelectionUnit() {}
+
+	FRTSDKCommanderSelectionUnit(uint32 inUnitID, URTSDKUnitComponent* inUnitComponent)	:
+		UnitID(inUnitID),
+		Unit(inUnitComponent)
+	{
+	}
+};
+
+USTRUCT()
+struct RTSDK_API FRTSDKCommanderSelectionUnits
+{
+	GENERATED_BODY()
+
+public:
+
+	UPROPERTY()
+		TArray<FRTSDKCommanderSelectionUnit> Units;
+};
+
+USTRUCT()
+struct RTSDK_API FRTSDKCommanderSelectionUnitWithDefinition
+{
+	GENERATED_BODY()
+
+public:
+
+	UPROPERTY()
+		uint32 UnitID;
+
+	UPROPERTY()
+		TObjectPtr<URTSDKUnitComponent> Unit;
+
+	UPROPERTY()
+		TSubclassOf<URTSDKUnitDefinition> UnitDefinition;
+
+	FRTSDKCommanderSelectionUnitWithDefinition() {}
+
+	FRTSDKCommanderSelectionUnitWithDefinition(uint32 inUnitID, URTSDKUnitComponent* inUnitComponent, UClass* inUnitDefinition) :
+		UnitID(inUnitID),
+		Unit(inUnitComponent),
+		UnitDefinition()
+	{
+	}
+
+	bool operator==(const FRTSDKCommanderSelectionUnitWithDefinition& Other)
+	{
+		return UnitID == Other.UnitID;
+	}
+};
+
+RTSDK_API bool operator==(const FRTSDKCommanderSelectionUnit& LHS, const FRTSDKCommanderSelectionUnit& RHS);
+
+USTRUCT(BlueprintType)
+struct RTSDK_API FRTSDKCommanderSelectionInfo
+{
+	GENERATED_BODY()
+
+public:
+
+	UPROPERTY()
+	TMap<TSubclassOf<URTSDKUnitDefinition>, FRTSDKCommanderSelectionUnits> UnitsByType;
+
+	void SortSelection();
+	void AddUnit(UClass* inDefinition, uint32 inID, URTSDKUnitComponent* inUnit);
+	void AddUnits(UClass* inDefinition, TArray<FRTSDKCommanderSelectionUnit> inUnits);
+	void RemoveUnit(UClass* inDefinition, FRTSDKCommanderSelectionUnit inUnits);
+	void RemoveUnits(UClass* inDefinition, TArray<FRTSDKCommanderSelectionUnit> inUnits);
+	void RemoveUnit(URTSDKUnitComponent* inUnit);
+	void ClearSelection();
+	TArray<FRTSDKCommanderSelectionUnit> GetAllUnits() const;
+	TArray<FRTSDKCommanderSelectionUnitWithDefinition> GetAllUnitsWithDefinitions() const;
+};
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FRTSDKOnCommanderSelectionChanged, ARTSDKCommanderStateBase*, Sender, const FRTSDKCommanderSelectionInfo&, NewSelection);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FRTSDKOnCommanderSubSelectionChanged, ARTSDKCommanderStateBase*, Sender, const FRTSDKCommanderSelectionUnit&, NewSubSelection);
 
 struct FRTSDKTurnDataArray;
 
@@ -54,6 +146,50 @@ struct RTSDK_API FRTSDKTurnDataArray : public FFastArraySerializer
 /** Specified to allow fast TArray replication */
 template<>
 struct TStructOpsTypeTraits<FRTSDKTurnDataArray> : public TStructOpsTypeTraitsBase2<FRTSDKTurnDataArray>
+{
+	enum
+	{
+		WithNetDeltaSerializer = true,
+	};
+};
+
+struct FRTSDKReplicatedSelectionArray;
+
+USTRUCT()
+struct RTSDK_API FRTSDKReplicatedSelectionItem : public FFastArraySerializerItem
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+		uint32 UnitID;
+
+	void PreReplicatedRemove(const FRTSDKReplicatedSelectionArray& InArraySerializer);
+	void PostReplicatedAdd(const FRTSDKReplicatedSelectionArray& InArraySerializer);
+	void PostReplicatedChange(const FRTSDKReplicatedSelectionArray& InArraySerializer);
+
+};
+
+USTRUCT()
+struct RTSDK_API FRTSDKReplicatedSelectionArray : public FFastArraySerializer
+{
+	GENERATED_BODY()
+
+	void Add(FRTSDKReplicatedSelectionItem inSelectionItem);
+
+	bool Get(int32 inIndex, FRTSDKReplicatedSelectionItem& outItem);
+
+	UPROPERTY()
+		TArray<FRTSDKReplicatedSelectionItem> Items;
+
+	bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
+	{
+		return FFastArraySerializer::FastArrayDeltaSerialize<FRTSDKReplicatedSelectionItem, FRTSDKReplicatedSelectionArray>(Items, DeltaParms, *this);
+	}
+};
+
+/** Specified to allow fast TArray replication */
+template<>
+struct TStructOpsTypeTraits<FRTSDKReplicatedSelectionArray> : public TStructOpsTypeTraitsBase2<FRTSDKReplicatedSelectionArray>
 {
 	enum
 	{
@@ -145,6 +281,43 @@ public:
 	UFUNCTION()
 		virtual void SetForce(ARTSDKForceStateBase* inForce) { }
 
+	UFUNCTION()
+		virtual void SetCurrentSelection(FRTSDKCommanderSelectionInfo inSelectionInfo);
+
+	/**
+	* Add Units To Selection
+	* Takes an array of selection unit structs and a UClass pointer to the unit definition
+	* adds multiple units of one type.
+	*/
+	UFUNCTION()
+		virtual void AddUnitsToSelection(const TArray<FRTSDKCommanderSelectionUnit>& inUnits, UClass* inUnitDefClass);
+
+	UFUNCTION()
+		virtual void AddUnitToSelection(FRTSDKCommanderSelectionUnitWithDefinition inUnit);
+
+	/**
+	* Remove Units From Selection
+	* Takes an array of selection unit structs and a UClass pointer to the unit definition
+	* removes multiple units of one type, if they exist in selection.
+	*/
+	UFUNCTION()
+		virtual void RemoveUnitsFromSelection(const TArray<FRTSDKCommanderSelectionUnit>& inUnits, UClass* inUnitDefClass);
+
+	UFUNCTION()
+		virtual void RemoveUnitFromSelection(FRTSDKCommanderSelectionUnitWithDefinition inUnit);
+
+	UFUNCTION()
+		virtual FRTSDKCommanderSelectionInfo GetCurrentSelection() { return CommanderSelection; }
+
+	UFUNCTION()
+		virtual TArray<FRTSDKCommanderSelectionUnit> GetAllCurrentSelectionUnits() { return CommanderSelection.GetAllUnits(); }
+
+	UPROPERTY(BlueprintAssignable)
+		FRTSDKOnCommanderSelectionChanged OnSelectionChanged;
+
+	UPROPERTY(BlueprintAssignable)
+		FRTSDKOnCommanderSubSelectionChanged OnSubSelectionChanged;
+
 protected:
 
 	//Set on spawn, the sim subsystem this commander belongs to.
@@ -168,6 +341,12 @@ protected:
 	//valid on all machines for peer 2 peer lockstep version
 	UPROPERTY(Transient)
 		int32 LastCompletedTurn;
+
+	UPROPERTY(Transient)
+		FRTSDKCommanderSelectionInfo CommanderSelection;
+
+	UPROPERTY(Transient)
+		FRTSDKCommanderSelectionUnitWithDefinition CommanderSubSelection;
 };
 
 /**

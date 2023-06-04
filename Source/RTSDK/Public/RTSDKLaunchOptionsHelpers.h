@@ -25,7 +25,7 @@ struct RTSDK_API FRTSDKLaunchOptionsHelpers
 public:
 
 #if WITH_EDITORONLY_DATA
-	static FString GetLaunchOptionsFromPIEMatchSetup(const TArray<FRTSDKPIETeamSetupInfo>& inPIETeams);
+	static FString GetLaunchOptionsFromPIEMatchSetup(const TArray<FRTSDKPIETeamSetupInfo>& inPIETeams, bool inPIEMatchIsLAN);
 #endif
 	static bool ExtractOptions(
 		const FString& inOptionsString, 

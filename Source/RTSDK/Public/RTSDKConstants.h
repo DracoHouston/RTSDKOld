@@ -33,6 +33,7 @@ namespace RTSDK
 {
 	const FName SimProcessingPhaseName = FName(TEXT("RTSDKGameSim"));
 	const FName FallingUnitComponentTag = FName(TEXT("FallingUnitComponentTag"));
+	const FString SharedUserSettingsSaveGameSlotName = TEXT("SharedUserSettings");
 }
 
 //Constants for processor group names, for execution order.

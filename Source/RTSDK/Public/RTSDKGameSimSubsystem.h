@@ -9,28 +9,14 @@
 #include "RTSDKScriptExecutionContext.h"
 #include "RTSDKGameSimSubsystem.generated.h"
 
+class UMassSpawnerSubsystem;
 class URTSDKUnitComponent;
-class ARTSDKPlayerState;
 class URTSDKPlayerCommandBase;
 class ARTSDKSimStateBase;
 class ARTSDKCommanderStateBase;
 class ARTSDKTeamStateBase;
 class ARTSDKForceStateBase;
 struct FRTSDKPlayerCommandReplicationInfo;
-
-
-USTRUCT(BlueprintType)
-struct RTSDK_API FRTSDKRegisteredPlayerInfo
-{
-public:
-	GENERATED_BODY()
-
-		UPROPERTY()
-		int32 PlayerID;
-
-		UPROPERTY()
-		TWeakObjectPtr<ARTSDKPlayerState> PlayerState;
-};
 
 USTRUCT(BlueprintType)
 struct RTSDK_API FRTSDKRegisteredUnitInfo
@@ -46,6 +32,9 @@ public:
 /**
  * 
  */
+//do we make this abstract so games have to subclass it in order to make it spawn?
+//can be done for them in template projects, manual setup guide can go over it, etc
+//consider it when further along
 UCLASS()
 class RTSDK_API URTSDKGameSimSubsystem : public UTickableWorldSubsystem
 {
@@ -61,14 +50,14 @@ public:
 	virtual TStatId GetStatId() const override;
 	//~End of USubsystem interface
 
-	void SetSimIsRunning(bool inSimIsRunning)
+	void SetSimIsInitialized(bool inSimIsInitialized)
 	{
-		bSimIsRunning = inSimIsRunning;
+		bSimIsInitialized = inSimIsInitialized;
 	}
 
-	bool IsSimRunning()
+	bool IsSimInitialized()
 	{
-		return bSimIsRunning;
+		return bSimIsInitialized;
 	}
 
 	bool IsSimPaused()
@@ -209,12 +198,8 @@ public:
 		GravityDirection = inGravityDirection;
 		GravityVector = GravityAcceleration > FRTSNumber64::Make(0.0) ? GravityDirection * GravityAcceleration : FRTSVector64::ZeroVector;
 	}
-
-	TArray<TObjectPtr<URTSDKPlayerCommandBase>> GetPlayerCommandsByTurn(int32 inFrame) const;
-
-	void AddInputCommands(ARTSDKCommanderStateBase* inCommander, const TArray<FRTSDKPlayerCommandReplicationInfo>& inCommandInputs);
 		
-	int64 RegisterUnit(AActor* inUnitActor, URTSDKUnitComponent* inUnitComponent, FMassEntityHandle inUnitHandle);
+	bool RegisterUnit(AActor* inUnitActor, URTSDKUnitComponent* inUnitComponent, FMassEntityHandle inUnitHandle, uint32& outUnitID);
 
 	bool DoesUnitExist(int64 TargetID) const
 	{
@@ -252,8 +237,16 @@ public:
 		SimState = inSimState;
 	}
 
+	bool SpawnUnit(UClass* inUnitDefinition, uint32& outUnitID, int32 inForce, FRTSVector64 inSpawnLocation, FRTSRotator64 inSpawnRotation = FRTSRotator64::ZeroRotator, bool bPlayAlert = true);
+
+	TSharedPtr<FMassEntityManager> GetEntityManager()
+	{
+		return EntityManager;
+	}
+
 protected:
-	bool bSimIsRunning;
+	bool bSimIsInitialized;
+	bool bLevelUnitsInitialized;
 	bool bSimIsPaused;
 	bool bInScriptCallingMode;
 	int32 FrameCount;
@@ -272,6 +265,8 @@ protected:
 
 	TSharedPtr<FMassEntityManager> EntityManager;
 
+	TObjectPtr<UMassSpawnerSubsystem> MassSpawnerSubsystem;
+
 	TObjectPtr<AWorldSettings> WorldSettings;
 
 	TObjectPtr<ARTSDKSimStateBase> SimState;
@@ -280,13 +275,12 @@ protected:
 	int32 LastLockstepTurnFrame;
 	int32 FramesPerLockstepTurn;
 	FRTSNumber64 LockstepTurnTimeStep;
-	TMap<int32, TArray<TObjectPtr<URTSDKPlayerCommandBase>>> PlayerCommandsByTurn;
 	
-	TMap<int64, FRTSDKRegisteredUnitInfo> UnitsByID;
+	TMap<uint32, FRTSDKRegisteredUnitInfo> UnitsByID;
 	TSharedPtr<FMassCommandBuffer> ScriptCommandBuffer;
 
 	//TMap<TSubclassOf<FRTSBatchedSimCommand>, TArray<TWeakPtr<FRTSBatchedSimCommand>>> SimCommands;
-	int64 NextUnitID;
+	uint32 NextUnitID;
 	int64 NextPlayerID;
 	
 	FRTSNumber64 MetersToUUScale;
@@ -323,9 +317,9 @@ protected:
 		UnitsByID.Empty();
 	}
 	
-	int64 ClaimUnitID()
+	uint32 ClaimUnitID()
 	{
-		int64 retval = NextUnitID;
+		uint32 retval = NextUnitID;
 		NextUnitID++;
 		return retval;
 	}

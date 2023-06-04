@@ -6,6 +6,10 @@
 #include "RTSDKTeamState.h"
 #include "RTSDKForceState.h"
 #include "RTSDKCommanderState.h"
+#include "InputAction.h"
+#include "InputMappingContext.h"
+#include "RTSDKGameUserSettings.h"
+#include "CommonActivatableWidget.h"
 
 URTSDKDeveloperSettings::URTSDKDeveloperSettings(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -15,8 +19,29 @@ URTSDKDeveloperSettings::URTSDKDeveloperSettings(const FObjectInitializer& Objec
 	MinimumNetTurnDuration = 0.25;
 	MinimumLANTurnDuration = 0.125;
 	LockstepTimeoutTurnCount = 4;
+	MaxTimescale = 10.0;
+	LockstepTurnDurationTolerance = 0.015625;
 	SimStateClass = ARTSDKSimStateServerClientLockstep::StaticClass();
 	TeamStateClass = ARTSDKTeamStateServerClientLockstep::StaticClass();
 	ForceStateClass = ARTSDKForceStateServerClientLockstep::StaticClass();
 	CommanderStateClass = ARTSDKCommanderStateServerClientLockstep::StaticClass();
+	SharedUserSettingsClass = URTSDKSharedUserSettings::StaticClass();
+	DefaultInputProfile = FRTSDKInputSettingsProfile();
+	if (StratPawnInputMapping.IsValid())
+	{
+		FRTSDKSavedBindContext stratpawncontext(StratPawnInputMapping.Get());
+
+		DefaultInputProfile.PlayerBindContexts.Add(stratpawncontext);
+	}
+}
+
+void URTSDKDeveloperSettings::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	DefaultInputProfile = FRTSDKInputSettingsProfile();
+	if (StratPawnInputMapping != nullptr)
+	{
+		FRTSDKSavedBindContext stratpawncontext(StratPawnInputMapping.Get());
+
+		DefaultInputProfile.PlayerBindContexts.Add(stratpawncontext);
+	}
 }

@@ -3,18 +3,19 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/PlayerController.h"
+#include "CommonPlayerController.h"
 #include "RTSDKPlayerControllerInterface.h"
 #include "RTSDKPlayerController.generated.h"
 
 class URTSDKPlayerCommandBase;
 class ARTSDKCommanderStateBase;
+class UCommonActivatableWidget;
 
 /**
  * 
  */
 UCLASS()
-class RTSDK_API ARTSDKPlayerController : public APlayerController, public IRTSDKPlayerControllerInterface
+class RTSDK_API ARTSDKPlayerController : public ACommonPlayerController, public IRTSDKPlayerControllerInterface
 {
 	GENERATED_BODY()
 public:
@@ -31,6 +32,7 @@ public:
 	virtual void FinishInputTurn(int32 inTurn, int32 inChecksum) override;
 	virtual void RequestPause() override;
 	virtual void RequestUnpause() override;
+	virtual void RequestTimescale(const FFixed64& inTimescale) override;
 	virtual ARTSDKCommanderStateBase* GetCommanderState() override;
 	virtual void SetCommanderState(ARTSDKCommanderStateBase* inState) override;
 	virtual bool GetWantsToBeReady() override;
@@ -54,20 +56,41 @@ public:
 	UFUNCTION(Server, Reliable)
 		void Server_RequestUnpause();	
 
-	UFUNCTION(Exec)
+	UFUNCTION(Server, Reliable)
+		void Server_RequestTimescale(const FFixed64& inTimescale);
+
+	UFUNCTION(Exec, BlueprintCallable)
 		void RTSDKTogglePause();
 
-	UFUNCTION(Exec)
+	UFUNCTION(Exec, BlueprintCallable)
 		void RTSDKRequestPause();
 
-	UFUNCTION(Exec)
+	UFUNCTION(Exec, BlueprintCallable)
 		void RTSDKRequestUnpause();
+
+	UFUNCTION(Exec, BlueprintCallable)
+		void RTSDKRequestTimescale(double inTimescale);
+
+	UFUNCTION(Exec, BlueprintCallable)
+		void RTSDKToggleIngameMenu();
+
+	UFUNCTION(Exec, BlueprintCallable)
+		void RTSDKOpenIngameMenu();
+
+	UFUNCTION(Exec, BlueprintCallable)
+		void RTSDKCloseIngameMenu();
+
+	UFUNCTION(BlueprintCallable)
+		void TestMoveInputCommand(const FVector2D& input);
 
 protected:
 
 	UPROPERTY(Transient, ReplicatedUsing = OnRep_CommanderState)
 		TObjectPtr<ARTSDKCommanderStateBase> CommanderState;
 
+	UPROPERTY(Transient)
+		TObjectPtr<UCommonActivatableWidget> GameMenuWidget;
+	
 	bool bWantsToBeReady;
 	
 };

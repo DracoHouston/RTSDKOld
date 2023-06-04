@@ -39,6 +39,9 @@ struct RTSDK_API FRTSDKLockstepPauseCommand : public FFastArraySerializerItem
 	UPROPERTY()
 	int32 Turn;
 
+	UPROPERTY()
+		bool bDoPause;
+
 	void PreReplicatedRemove(const FRTSDKLockstepPauseCommands& InArraySerializer);
 	void PostReplicatedAdd(const FRTSDKLockstepPauseCommands& InArraySerializer);
 	void PostReplicatedChange(const FRTSDKLockstepPauseCommands& InArraySerializer);
@@ -50,9 +53,11 @@ struct RTSDK_API FRTSDKLockstepPauseCommands : public FFastArraySerializer
 {
 	GENERATED_BODY()
 
-	void AddPauseCommand(int32 inTurn);
+	void AddPauseCommand(int32 inTurn, bool inDoPause);
 
 	bool HasPauseCommandOnTurn(int32 inTurn);
+
+	bool HasTurn(int32 inTurn);
 
 	UPROPERTY()
 		TArray<FRTSDKLockstepPauseCommand> PauseCommands;
@@ -66,6 +71,106 @@ struct RTSDK_API FRTSDKLockstepPauseCommands : public FFastArraySerializer
 /** Specified to allow fast TArray replication */
 template<>
 struct TStructOpsTypeTraits<FRTSDKLockstepPauseCommands> : public TStructOpsTypeTraitsBase2<FRTSDKLockstepPauseCommands>
+{
+	enum
+	{
+		WithNetDeltaSerializer = true,
+	};
+};
+
+struct FRTSDKLockstepTimescaleCommands;
+
+USTRUCT()
+struct RTSDK_API FRTSDKLockstepTimescaleCommand : public FFastArraySerializerItem
+{
+	GENERATED_BODY()
+
+		UPROPERTY()
+		int32 Turn;
+
+	UPROPERTY()
+		FFixed64 Timescale;
+
+	void PreReplicatedRemove(const FRTSDKLockstepTimescaleCommands& InArraySerializer);
+	void PostReplicatedAdd(const FRTSDKLockstepTimescaleCommands& InArraySerializer);
+	void PostReplicatedChange(const FRTSDKLockstepTimescaleCommands& InArraySerializer);
+
+};
+
+USTRUCT()
+struct RTSDK_API FRTSDKLockstepTimescaleCommands : public FFastArraySerializer
+{
+	GENERATED_BODY()
+
+	void AddTimescaleCommand(int32 inTurn, FFixed64 inTimescale);
+	void AddEmptyTimescaleCommand(int32 inTurn);
+
+	bool HasTimescaleCommandOnTurn(int32 inTurn, FFixed64& outTimescale);
+
+	bool HasTurn(int32 inTurn);
+
+	UPROPERTY()
+		TArray<FRTSDKLockstepTimescaleCommand> TimescaleCommands;
+
+	bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
+	{
+		return FFastArraySerializer::FastArrayDeltaSerialize<FRTSDKLockstepTimescaleCommand, FRTSDKLockstepTimescaleCommands>(TimescaleCommands, DeltaParms, *this);
+	}
+};
+
+/** Specified to allow fast TArray replication */
+template<>
+struct TStructOpsTypeTraits<FRTSDKLockstepTimescaleCommands> : public TStructOpsTypeTraitsBase2<FRTSDKLockstepTimescaleCommands>
+{
+	enum
+	{
+		WithNetDeltaSerializer = true,
+	};
+};
+
+struct FRTSDKLockstepTurnDurationCommands;
+
+USTRUCT()
+struct RTSDK_API FRTSDKLockstepTurnDurationCommand : public FFastArraySerializerItem
+{
+	GENERATED_BODY()
+
+		UPROPERTY()
+		int32 Turn;
+
+	UPROPERTY()
+		FFixed64 TurnDuration;
+
+	void PreReplicatedRemove(const FRTSDKLockstepTurnDurationCommands& InArraySerializer);
+	void PostReplicatedAdd(const FRTSDKLockstepTurnDurationCommands& InArraySerializer);
+	void PostReplicatedChange(const FRTSDKLockstepTurnDurationCommands& InArraySerializer);
+
+};
+
+USTRUCT()
+struct RTSDK_API FRTSDKLockstepTurnDurationCommands : public FFastArraySerializer
+{
+	GENERATED_BODY()
+
+		void AddTurnDurationCommand(int32 inTurn, FFixed64 inTurnDuration);
+	void AddEmptyTurnDurationCommand(int32 inTurn);
+
+	bool HasTurnDurationCommandOnTurn(int32 inTurn, FFixed64& outTurnDuration);
+
+	bool HasTurn(int32 inTurn);
+
+	UPROPERTY()
+		TArray<FRTSDKLockstepTurnDurationCommand> TurnDurationCommands;
+
+	bool NetDeltaSerialize(FNetDeltaSerializeInfo& DeltaParms)
+	{
+		return FFastArraySerializer::FastArrayDeltaSerialize<FRTSDKLockstepTurnDurationCommand, FRTSDKLockstepTurnDurationCommands>(TurnDurationCommands, DeltaParms, *this);
+	}
+};
+
+/** Specified to allow fast TArray replication */
+template<>
+struct TStructOpsTypeTraits<FRTSDKLockstepTurnDurationCommands> : public TStructOpsTypeTraitsBase2<FRTSDKLockstepTurnDurationCommands>
 {
 	enum
 	{
@@ -87,6 +192,12 @@ public:
 	ARTSDKSimStateBase(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 	UFUNCTION()
+		virtual void PlayerSetup();
+
+	UFUNCTION()
+		virtual bool GetIsPlayerSetup();
+
+	UFUNCTION()
 	virtual void Setup(URTSDKGameSimSubsystem* inSimSubsystem, UWorld* inWorld);
 
 	UFUNCTION()
@@ -99,7 +210,7 @@ public:
 		virtual void SetupCommanders(const TMap<int32, FRTSDKStateSetupInfo>& inOptionsMap) {}
 
 	UFUNCTION()
-		virtual ERTSDKPreMatchTickResult PreMatchTick();
+		virtual void PreMatchTick() {}
 
 	UFUNCTION()
 		virtual void SetMatchHasStarted(bool inMatchHasStarted) {}
@@ -113,11 +224,21 @@ public:
 	UFUNCTION()
 		virtual bool GetMatchIsPaused() { return false; }
 
+	/**
+	* Virtual function that performs checks for auto unpause while match is paused.
+	* Returns false by default, overrides to this can handle logic for auto unpause systems.
+	*/
+	UFUNCTION()
+		virtual bool ShouldAutoUnpause() { return false; }
+
 	UFUNCTION()
 		virtual void RequestPause(AController* inController) {}
 
 	UFUNCTION()
 		virtual void RequestUnpause(AController* inController) {}
+
+	UFUNCTION()
+		virtual void RequestTimescale(AController* inController, const FFixed64& inTimescale) {}
 
 	UFUNCTION()
 		virtual ERTSDKShouldAdvanceInputTurnResult ShouldAdvanceInputTurn() { return ERTSDKShouldAdvanceInputTurnResult::Skip; }
@@ -213,13 +334,14 @@ public:
 	virtual void SetupTeams(const TMap<int32, FRTSDKStateSetupInfo>& inOptionsMap) override;
 	virtual void SetupForces(const TMap<int32, FRTSDKStateSetupInfo>& inOptionsMap) override;
 	virtual void SetupCommanders(const TMap<int32, FRTSDKStateSetupInfo>& inOptionsMap) override;
-	virtual ERTSDKPreMatchTickResult PreMatchTick() override; 
+	virtual void PreMatchTick() override; 
 	virtual void SetMatchHasStarted(bool inMatchHasStarted) override;
 	virtual bool GetMatchHasStarted() override;
 	virtual void SetMatchIsPaused(bool inMatchIsPaused) override;
 	virtual bool GetMatchIsPaused() override;
 	virtual void RequestPause(AController* inController) override;
 	virtual void RequestUnpause(AController* inController) override;
+	virtual void RequestTimescale(AController* inController, const FFixed64& inTimescale) override;
 	virtual ERTSDKShouldAdvanceInputTurnResult ShouldAdvanceInputTurn() override;
 	virtual void OnPreAdvanceInputTurn() override;
 	virtual ARTSDKCommanderStateBase* GetCommander(const int32& inCommanderID) override;
@@ -275,17 +397,19 @@ public:
 	ARTSDKSimStateServerClientLockstep(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 	//RTSDKSimState interface
+	virtual bool GetIsPlayerSetup() override;
 	virtual void Setup(URTSDKGameSimSubsystem* inSimSubsystem, UWorld* inWorld) override;
 	virtual void SetupTeams(const TMap<int32, FRTSDKStateSetupInfo>& inOptionsMap) override;
 	virtual void SetupForces(const TMap<int32, FRTSDKStateSetupInfo>& inOptionsMap) override;
 	virtual void SetupCommanders(const TMap<int32, FRTSDKStateSetupInfo>& inOptionsMap) override;
-	virtual ERTSDKPreMatchTickResult PreMatchTick() override;
+	virtual void PreMatchTick() override;
 	virtual void SetMatchHasStarted(bool inMatchHasStarted) override;
 	virtual bool GetMatchHasStarted() override;
 	virtual void SetMatchIsPaused(bool inMatchIsPaused) override;
 	virtual bool GetMatchIsPaused() override;
 	virtual void RequestPause(AController* inController) override;
 	virtual void RequestUnpause(AController* inController) override;
+	virtual void RequestTimescale(AController* inController, const FFixed64& inTimescale) override;
 	virtual ERTSDKShouldAdvanceInputTurnResult ShouldAdvanceInputTurn() override;
 	virtual void OnPreAdvanceInputTurn() override;
 	virtual ARTSDKCommanderStateBase* GetCommander(const int32& inCommanderID) override;
@@ -312,24 +436,47 @@ public:
 	UFUNCTION()
 		virtual bool PlayerMayRequestUnpause(AController* inController, ARTSDKCommanderStateBase*& outCommander);
 
+	UFUNCTION()
+		virtual bool PlayerMayRequestTimescale(AController* inController, const FFixed64& inTimescale);
+
 	UFUNCTION(NetMulticast, Reliable)
 		void Multicast_OnUnpauseMatch();
+
+	UFUNCTION()
+		virtual void AdvancePauseCommands();
+
+	UFUNCTION()
+		virtual void AdvanceTimescaleCommands();
+
+	UFUNCTION()
+		virtual void AdvanceTurnDurationCommands();
 
 protected:
 
 	int32 CalculateFramesPerTurn();
 
+	FFixed64 CalculateTurnDuration();
+
 	UPROPERTY(Transient)
 	int32 LastTurnFrame;
 
-	UPROPERTY(Transient, Replicated)
+	UPROPERTY(Transient)
 	int32 FramesPerTurn;
 
 	UPROPERTY(Transient, Replicated)
 		int32 LockstepTimeoutTurnCount;
 
-	UPROPERTY(Transient, Replicated)
+	UPROPERTY(Transient)
+		FFixed64 TurnDuration;
+
+	UPROPERTY(Transient)
 	FFixed64 MinTurnDuration;
+
+	UPROPERTY(Transient, Replicated)
+		FFixed64 InitialTurnDuration;
+
+	UPROPERTY(Transient)
+		FFixed64 DesiredTimescale;
 
 	UPROPERTY(Transient, Replicated)
 		TArray<TObjectPtr<ARTSDKCommanderStateBase>> Commanders;
@@ -352,6 +499,12 @@ protected:
 
 	UPROPERTY(Transient, Replicated)
 		FRTSDKLockstepPauseCommands PauseCommands;
+
+	UPROPERTY(Transient, Replicated)
+		FRTSDKLockstepTimescaleCommands TimescaleCommands;
+
+	UPROPERTY(Transient, Replicated)
+		FRTSDKLockstepTurnDurationCommands TurnDurationCommands;
 };
 
 /**
@@ -374,6 +527,8 @@ public:
 	ARTSDKSimStateServerClientCurves(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 	//RTSDKSimState interface
+	/*virtual void PlayerSetup() override;
+	virtual bool GetIsPlayerSetup() override;*/
 	virtual void SetupTeams(const TMap<int32, FRTSDKStateSetupInfo>& inOptionsMap) override;
 	virtual void SetupForces(const TMap<int32, FRTSDKStateSetupInfo>& inOptionsMap) override;
 	virtual void SetupCommanders(const TMap<int32, FRTSDKStateSetupInfo>& inOptionsMap) override;

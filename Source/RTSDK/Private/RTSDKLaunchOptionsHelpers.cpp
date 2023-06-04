@@ -4,13 +4,17 @@
 #include "RTSDKWorldSettings.h"
 #include "Kismet/GameplayStatics.h"
 
-FString FRTSDKLaunchOptionsHelpers::GetLaunchOptionsFromPIEMatchSetup(const TArray<FRTSDKPIETeamSetupInfo>& inPIETeams)
+FString FRTSDKLaunchOptionsHelpers::GetLaunchOptionsFromPIEMatchSetup(const TArray<FRTSDKPIETeamSetupInfo>& inPIETeams, bool inPIEMatchIsLAN)
 {
     FString PIELaunchOptions;
     int32 commanderidx = 0;
     int32 forceidx = 0;
     int32 humanidx = 0;
     //construct the new url options to pass into sim state setup
+    if (inPIEMatchIsLAN)
+    {
+        PIELaunchOptions += TEXT("?bIsLANMatch");
+    }
     //teams
     for (int32 t = 0; t < inPIETeams.Num(); t++)
     {

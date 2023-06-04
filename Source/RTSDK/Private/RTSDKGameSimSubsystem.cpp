@@ -7,19 +7,24 @@
 #include "MassExecutor.h"
 #include "MassEntitySubsystem.h"
 #include "MassSignalSubsystem.h"
-#include "RTSDKPlayerState.h"
 #include "RTSDKGameStateBase.h"
 #include "RTSDKSimState.h"
 #include "RTSDKTeamState.h"
 #include "RTSDKForceState.h"
 #include "RTSDKCommanderState.h"
 #include "RTSDKWorldSettings.h"
+#include "RTSDKUnitDefinition.h"
+#include "RTSDKUnitComponent.h"
+#include "RTSDKUnitSpawner.h"
+#include "MassSpawnerSubsystem.h"
+#include "MassEntityView.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
+#include "Kismet/GameplayStatics.h"
 
 void URTSDKGameSimSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	bInScriptCallingMode = false;
-	PlayerCommandsByTurn.Empty();
 	ResetFrameCount();
 	ResetUnits();
 	//SetFrameDelay(1);
@@ -45,6 +50,7 @@ void URTSDKGameSimSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 #endif // WITH_EDITOR
 	FString FileName = !DependencyGraphFileName.IsEmpty() ? FString::Printf(TEXT("%s_%s"), *DependencyGraphFileName, *Settings->SimProcessingPhaseConfig.PhaseName.ToString()) : FString();
 	UMassEntitySubsystem* EntitySubsystem = InWorld.GetSubsystem<UMassEntitySubsystem>();
+	MassSpawnerSubsystem = InWorld.GetSubsystem<UMassSpawnerSubsystem>();
 	EntityManager = EntitySubsystem->GetMutableEntityManager().AsShared();
 	SimProcessor = NewObject<UMassCompositeProcessor>(this, Settings->SimProcessingPhaseConfig.PhaseGroupClass,
 		*FString::Printf(TEXT("ProcessingPhase_%s"), *Settings->SimProcessingPhaseConfig.PhaseName.ToString()));
@@ -62,6 +68,7 @@ void URTSDKGameSimSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 	SetGravityDirection(FVector::DownVector);
 	SetGravityAcceleration(9.8);
 	SetTerminalVelocity(40.0);
+	bLevelUnitsInitialized = false;
 
 	LastRealTimeSeconds = InWorld.RealTimeSeconds;
 	bSimIsPaused = false;
@@ -70,15 +77,14 @@ void URTSDKGameSimSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 		ARTSDKSimStateBase* simstate = InWorld.SpawnActor<ARTSDKSimStateBase>(RTSDKSettings->SimStateClass);
 		simstate->Setup(this, &InWorld);
 		SimState = simstate;
-		bSimIsRunning = true;
+		bSimIsInitialized = true;
 	}
 }
 
 void URTSDKGameSimSubsystem::Deinitialize()
 {
-	PlayerCommandsByTurn.Empty();
 	UnitsByID.Empty();
-	bSimIsRunning = false;
+	bSimIsInitialized = false;
 	bInScriptCallingMode = false;
 	ScriptCommandBuffer.Reset();
 	Super::Deinitialize();
@@ -91,22 +97,50 @@ TStatId URTSDKGameSimSubsystem::GetStatId() const
 
 void URTSDKGameSimSubsystem::Tick(float DeltaTime)
 {
-	if (!bSimIsRunning)
+	if (!bSimIsInitialized)
 	{
 		return;
 	}
+
+	if (!SimState->GetIsPlayerSetup())
+	{
+		SimState->PlayerSetup();
+		return;
+	}
+	
 	if (!SimState->GetMatchHasStarted())
 	{
-		ERTSDKPreMatchTickResult prematchresult = SimState->PreMatchTick();
-		if (prematchresult == ERTSDKPreMatchTickResult::Ready)
-		{
-			SimState->SetMatchHasStarted(true);
-		}
-		else
-		{
-			return;
-		}
+		SimState->PreMatchTick();
+		return;
 	}
+
+	if (!bLevelUnitsInitialized)
+	{
+		UWorld* world = GetWorld();
+		TArray<ARTSDKUnitSpawner*> spawners;
+		for (TActorIterator<ARTSDKUnitSpawner> It(world, ARTSDKUnitSpawner::StaticClass()); It; ++It)
+		{
+			ARTSDKUnitSpawner* spawner = *It;
+			spawners.Add(spawner);
+			/*uint32 unitid;
+			SpawnUnit(spawner->UnitType, unitid, spawner->ForceID, spawner->GetActorLocation(), spawner->GetActorRotation(), false);*/
+		}
+		spawners.Sort
+		(
+			[](const ARTSDKUnitSpawner& A, const ARTSDKUnitSpawner& B)
+			{
+				return A.GetPathName() < B.GetPathName();
+			}
+		);
+
+		for (int32 i = 0; i < spawners.Num(); i++)
+		{
+			uint32 unitid;
+			SpawnUnit(spawners[i]->UnitType, unitid, spawners[i]->ForceID, spawners[i]->GetActorLocation(), spawners[i]->GetActorRotation(), false);
+		}
+		bLevelUnitsInitialized = true;
+	}
+
 	FRTSNumber64 realtimeseconds = GetWorld()->RealTimeSeconds;
 	FRTSNumber64 deltarealtime = realtimeseconds - LastRealTimeSeconds;
 	if (!bSimIsPaused)
@@ -133,6 +167,13 @@ void URTSDKGameSimSubsystem::Tick(float DeltaTime)
 	}
 	else
 	{
+		if (SimState->GetMatchIsPaused())
+		{
+			if (SimState->ShouldAutoUnpause())
+			{
+				SimState->SetMatchIsPaused(false);
+			}
+		}
 		ERTSDKShouldAdvanceInputTurnResult advanceturn = SimState->ShouldAdvanceInputTurn();
 		if (advanceturn == ERTSDKShouldAdvanceInputTurnResult::Advance)
 		{
@@ -172,37 +213,20 @@ bool URTSDKGameSimSubsystem::ShouldAdvanceFrame() const
 	return FRTSMath::FloorToNumber64(PausedDilatedTimeSeconds / TimeStep) > (FRTSNumber64)FrameCount;
 }
 
-TArray<TObjectPtr<URTSDKPlayerCommandBase>> URTSDKGameSimSubsystem::GetPlayerCommandsByTurn(int32 inTurn) const
-{
-	const TArray<TObjectPtr<URTSDKPlayerCommandBase>>* retval = nullptr;
-	retval = PlayerCommandsByTurn.Find(inTurn);
-	return *retval;
-}
-
-void URTSDKGameSimSubsystem::AddInputCommands(ARTSDKCommanderStateBase* inCommander, const TArray<FRTSDKPlayerCommandReplicationInfo>& inCommandInputs)
-{
-	TArray<TObjectPtr<URTSDKPlayerCommandBase>>& turncommands = PlayerCommandsByTurn.FindOrAdd(CurrentInputTurn + 1);
-	for (int32 i = 0; i < inCommandInputs.Num(); i++)
-	{
-		URTSDKPlayerCommandBase* command = NewObject<URTSDKPlayerCommandBase>(this, inCommandInputs[i].Class.Get());
-		command->SetAll(inCommander, this, inCommandInputs[i]);
-		turncommands.Add(command);
-	}
-}
-
-int64 URTSDKGameSimSubsystem::RegisterUnit(AActor* inUnitActor, URTSDKUnitComponent* inUnitComponent, FMassEntityHandle inUnitHandle)
+bool URTSDKGameSimSubsystem::RegisterUnit(AActor* inUnitActor, URTSDKUnitComponent* inUnitComponent, FMassEntityHandle inUnitHandle, uint32& outUnitID)
 {
 	if ((inUnitActor == nullptr) || (!inUnitHandle.IsValid()))
 	{
-		return -1;
+		return false;
 	}
 
-	int64 newid = ClaimUnitID();
+	uint32 newid = ClaimUnitID();
 	FRTSDKRegisteredUnitInfo& newunit = UnitsByID.Add(newid);
 	newunit.UnitActor = inUnitActor;
 	newunit.UnitComponent = inUnitComponent;
 	newunit.UnitHandle = inUnitHandle;
-	return newid;
+	outUnitID = newid;
+	return true;
 }
 
 FMassCommandBuffer& URTSDKGameSimSubsystem::StartScriptCallingMode()
@@ -222,6 +246,57 @@ void URTSDKGameSimSubsystem::SetGlobalGravityDirection(FVector inDir)
 	inDir.Normalize();
 	SetGravityDirection(inDir);
 	SignalSubsystem->SignalEntities(UE::Mass::Signals::RTSDKUnitGravityChanged, GetAllUnitEntityHandles());
+}
+
+bool URTSDKGameSimSubsystem::SpawnUnit(UClass* inUnitDefinition, uint32& outUnitID, int32 inForce, FRTSVector64 inSpawnLocation, FRTSRotator64 inSpawnRotation, bool bPlayAlert)
+{
+	FActorSpawnParameters params;
+	URTSDKUnitDefinition* unitdef = inUnitDefinition->GetDefaultObject<URTSDKUnitDefinition>();
+	params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	UWorld* world = GetWorld();
+	AActor* unitactor = world->SpawnActor<AActor>(unitdef->UnitActor, inSpawnLocation, inSpawnRotation, params);
+	if (unitactor == nullptr)
+	{
+		return false;
+	}
+	UActorComponent* comp = unitactor->GetComponentByClass(URTSDKUnitComponent::StaticClass());
+	if (comp == nullptr)
+	{
+		unitactor->Destroy();
+		return false;
+	}
+	URTSDKUnitComponent* unitcomp = Cast<URTSDKUnitComponent>(comp);
+	if (unitcomp == nullptr)
+	{
+		unitactor->Destroy();
+		return false;
+	}
+	const FMassEntityConfig& EntityConfig = unitdef->UnitConfig;
+	const FMassEntityTemplate& EntityTemplate = EntityConfig.GetOrCreateEntityTemplate(*world, *unitdef);
+	TArray<FMassEntityHandle> Entities;
+	MassSpawnerSubsystem->SpawnEntities(EntityTemplate, 1, Entities);
+	if (Entities.Num() <= 0)
+	{
+		unitactor->Destroy();
+		return false;
+	}
+	FMassEntityView EntityView(EntityTemplate.GetArchetype(), Entities[0]);
+	uint32 unitid = ClaimUnitID();
+	unitcomp->Setup(this, unitid, inForce, inUnitDefinition, Entities[0]);
+	if (EntityTemplate.GetObjectFragmentInitializers().Num())
+	{
+		for (const FMassEntityTemplate::FObjectFragmentInitializerFunction& Initializer : EntityTemplate.GetObjectFragmentInitializers())
+		{
+			Initializer(*unitactor, EntityView, EMassTranslationDirection::MassToActor);
+		}
+	}
+	outUnitID = unitid;
+	FRTSDKRegisteredUnitInfo info;
+	info.UnitActor = unitactor;
+	info.UnitComponent = unitcomp;
+	info.UnitHandle = Entities[0];
+	UnitsByID.Add(unitid, info);
+	return true;
 }
 
 bool URTSDKGameSimSubsystem::ShouldFinalizeLockstepTurn()
@@ -253,17 +328,27 @@ void URTSDKGameSimSubsystem::FinalizeLockstepTurn()
 {
 	//flushes all the command buffers
 	SimState->OnPreAdvanceInputTurn();
-	//get the previous turn's commands, queue them for next turn
+	//get this turn's commands, spawn and execute them.
 	TArray<FInputTurnFinalizeInfo> infos;
 	for (int32 i = 0; i < SimState->GetCommanderCount(); i++)
 	{
-		TArray<FRTSDKPlayerCommandReplicationInfo> commands = SimState->GetCommandsForCommanderByTurn(i, CurrentInputTurn - 1);
+		TArray<FRTSDKPlayerCommandReplicationInfo> commands = SimState->GetCommandsForCommanderByTurn(i, CurrentInputTurn);
 		infos.Add(FInputTurnFinalizeInfo(SimState->GetCommander(i), i, commands));
 	}
 	infos.Sort();
+	TArray<URTSDKPlayerCommandBase*> commands;
 	for (int32 i = 0; i < infos.Num(); i++)
 	{
-		AddInputCommands(infos[i].commander, infos[i].commands);
+		for (int32 c = 0; c < infos[i].commands.Num(); c++)
+		{
+			URTSDKPlayerCommandBase* command = NewObject<URTSDKPlayerCommandBase>(this, infos[i].commands[c].Class.Get());
+			command->SetAll(infos[i].commander, this, infos[i].commands[c]);
+			commands.Add(command);
+		}
+	}
+	for (int32 i = 0; i < commands.Num(); i++)
+	{
+		commands[i]->Execute();
 	}
 	CurrentInputTurn++;
 }
